@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Lessmore</string>
+    <string name="monitor_channel_name">应用监控服务</string>
+    <string name="monitor_channel_description">持续监控目标应用的使用状态</string>
+    <string name="monitor_notification_title">Lessmore 运行中</string>
+    <string name="monitor_notification_text">正在监控目标应用使用情况</string>
+    <string name="warning_channel_name">使用提醒</string>
+    <string name="warning_channel_description">应用使用时长达到限制的80%时提醒</string>
+    <string name="warning_notification_title">使用时长提醒</string>
+    <string name="warning_notification_text">%1$s 的使用时长已达到限制的80%%，请注意控制使用时间</string>
+    <string name="lock_usage_limit_title">今日使用时长已达上限</string>
+    <string name="lock_usage_limit_detail">已使用 %1$s</string>
+    <string name="lock_outside_period_title">当前时间段不允许使用</string>
+    <string name="lock_outside_period_detail">下一个允许时间段: %1$s</string>
+    <string name="lock_outside_period_no_next">今日无更多允许使用时间段</string>
+    <string name="lock_go_home">返回桌面</string>
+    <string name="lock_forced_message">限制条件解除前无法退出</string>
+    <string name="device_admin_label">Lessmore 设备管理器</string>
+    <string name="device_admin_description">用于防卸载、防绕过和强制锁定保护</string>
+    <string name="device_admin_enabled">设备管理器已启用</string>
+    <string name="device_admin_disabled">设备管理器已停用</string>
+    <string name="device_admin_disable_requires_auth">请先在应用内完成身份验证，再停用设备管理器</string>
+    <string name="device_admin_disable_authorized">身份验证已通过，可继续停用设备管理器</string>
+</resources>
