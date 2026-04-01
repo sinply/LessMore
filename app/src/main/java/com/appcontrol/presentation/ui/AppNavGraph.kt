@@ -1,6 +1,5 @@
 package com.appcontrol.presentation.ui
 
-import android.app.Activity
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
@@ -9,8 +8,10 @@ import android.net.Uri
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,7 +26,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -33,6 +33,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -47,19 +48,23 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.appcontrol.R
 import com.appcontrol.domain.usecase.VerifyPasswordUseCase
+import com.appcontrol.presentation.i18n.LocaleManager
 import com.appcontrol.presentation.viewmodel.AppListItemUi
 import com.appcontrol.presentation.viewmodel.AppViewModel
+import com.appcontrol.service.monitor.MonitorPreferences
 import com.appcontrol.service.monitor.MonitorService
 import com.appcontrol.service.receiver.AppDeviceAdminReceiver
 import com.appcontrol.service.receiver.DeviceAdminAuthGate
@@ -80,7 +85,6 @@ fun AppNavGraph(viewModel: AppViewModel = hiltViewModel()) {
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
-    // 等待settings加载完成再决定启动路由
     val hasPassword = settings?.passwordHash?.isNotBlank() == true
     val hasUsagePermission = PermissionUtils.hasUsageStatsPermission(context)
     val hasOverlayPermission = PermissionUtils.hasOverlayPermission(context)
@@ -99,7 +103,7 @@ fun AppNavGraph(viewModel: AppViewModel = hiltViewModel()) {
         }
     }
 
-    Scaffold(snackbarHost = { SnackbarHost(snackbarHostState) }) { padding ->
+    AppBackgroundScaffold(snackbarHostState = snackbarHostState) { padding ->
         NavHost(
             navController = navController,
             startDestination = startDestination,
@@ -150,6 +154,34 @@ fun AppNavGraph(viewModel: AppViewModel = hiltViewModel()) {
 }
 
 @Composable
+private fun AppBackgroundScaffold(
+    snackbarHostState: SnackbarHostState,
+    content: @Composable (androidx.compose.foundation.layout.PaddingValues) -> Unit
+) {
+    val colors = MaterialTheme.colorScheme
+    Scaffold(
+        containerColor = androidx.compose.ui.graphics.Color.Transparent,
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { padding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    brush = Brush.verticalGradient(
+                        listOf(
+                            colors.background,
+                            colors.surfaceVariant.copy(alpha = 0.65f),
+                            colors.background
+                        )
+                    )
+                )
+        ) {
+            content(padding)
+        }
+    }
+}
+
+@Composable
 private fun OnboardingScreen(onDone: () -> Unit) {
     val context = LocalContext.current
     var usageGranted by remember { mutableStateOf(PermissionUtils.hasUsageStatsPermission(context)) }
@@ -169,22 +201,20 @@ private fun OnboardingScreen(onDone: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Text("权限引导", style = MaterialTheme.typography.headlineSmall)
-        Text("首次使用请授予必要权限，保证后台监控与锁定能力。")
+        Text(stringResource(R.string.onboarding_title), style = MaterialTheme.typography.headlineSmall)
+        Text(stringResource(R.string.onboarding_subtitle), style = MaterialTheme.typography.bodyLarge)
 
         PermissionItem(
-            title = "使用情况访问权限",
+            title = stringResource(R.string.permission_usage_title),
             granted = usageGranted,
-            onGrant = {
-                settingsLauncher.launch(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
-            }
+            onGrant = { settingsLauncher.launch(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) }
         )
 
         PermissionItem(
-            title = "悬浮窗权限",
+            title = stringResource(R.string.permission_overlay_title),
             granted = overlayGranted,
             onGrant = {
                 val intent = Intent(
@@ -196,25 +226,25 @@ private fun OnboardingScreen(onDone: () -> Unit) {
         )
 
         PermissionItem(
-            title = "设备管理器权限（强制锁定建议开启）",
+            title = stringResource(R.string.permission_admin_title),
             granted = adminGranted,
             onGrant = {
                 val component = ComponentName(context, AppDeviceAdminReceiver::class.java)
                 val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
                     putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, component)
-                    putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, "用于防卸载与防绕过")
+                    putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, context.getString(R.string.permission_admin_explanation))
                 }
                 settingsLauncher.launch(intent)
             }
         )
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(8.dp))
         Button(
             onClick = onDone,
             enabled = usageGranted && overlayGranted,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("继续")
+            Text(stringResource(R.string.common_continue))
         }
     }
 }
@@ -225,18 +255,31 @@ private fun PermissionItem(
     granted: Boolean,
     onGrant: () -> Unit
 ) {
-    Card(colors = CardDefaults.cardColors()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(title)
-                Text(if (granted) "已授权" else "未授权", color = if (granted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    if (granted) stringResource(R.string.permission_granted) else stringResource(R.string.permission_not_granted),
+                    color = if (granted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium
+                )
             }
-            Button(onClick = onGrant) { Text(if (granted) "去检查" else "去授权") }
+            Button(onClick = onGrant) {
+                Text(
+                    if (granted) stringResource(R.string.permission_check_again)
+                    else stringResource(R.string.permission_go_grant)
+                )
+            }
         }
     }
 }
@@ -255,41 +298,52 @@ private fun SetPasswordScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
+            .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("设置管理密码", style = MaterialTheme.typography.headlineSmall)
+        Text(stringResource(R.string.set_password_title), style = MaterialTheme.typography.headlineSmall)
         OutlinedTextField(
             value = password,
             onValueChange = { password = it },
-            label = { Text("密码（至少4位）") },
+            label = { Text(stringResource(R.string.set_password_input)) },
             visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
         )
         OutlinedTextField(
             value = confirmPassword,
             onValueChange = { confirmPassword = it },
-            label = { Text("确认密码") },
+            label = { Text(stringResource(R.string.set_password_confirm)) },
             visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
         )
         if (biometricAvailable) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("启用生物识别")
-                Spacer(Modifier.width(8.dp))
-                Switch(checked = enableBiometric, onCheckedChange = { enableBiometric = it })
+            Surface(
+                tonalElevation = 2.dp,
+                shape = MaterialTheme.shapes.medium,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(stringResource(R.string.settings_biometric), style = MaterialTheme.typography.bodyLarge)
+                    Switch(checked = enableBiometric, onCheckedChange = { enableBiometric = it })
+                }
             }
         }
         Button(onClick = { onSubmit(password, enableBiometric) }, enabled = valid, modifier = Modifier.fillMaxWidth()) {
-            Text("完成")
+            Text(stringResource(R.string.common_done))
         }
     }
 }
 
-private enum class MainTab(val title: String) {
-    Apps("应用管理"),
-    Stats("使用统计"),
-    Settings("设置")
+private enum class MainTab(val titleRes: Int) {
+    Apps(R.string.tab_apps),
+    Stats(R.string.tab_stats),
+    Settings(R.string.tab_settings)
 }
 
 @Composable
@@ -298,21 +352,28 @@ private fun MainScreen(
     onOpenRule: (String) -> Unit
 ) {
     var selectedTab by rememberSaveable { mutableStateOf(MainTab.Apps) }
-    var monitorEnabled by rememberSaveable { mutableStateOf(false) }
     val context = LocalContext.current
+    var monitorEnabled by remember { mutableStateOf(MonitorPreferences.isMonitorEnabled(context)) }
     val usageGranted = PermissionUtils.hasUsageStatsPermission(context)
     val overlayGranted = PermissionUtils.hasOverlayPermission(context)
     val hasMissingPermission = !usageGranted || !overlayGranted
 
+    LaunchedEffect(monitorEnabled, hasMissingPermission) {
+        if (monitorEnabled && !hasMissingPermission) {
+            MonitorService.startService(context)
+        }
+    }
+
     Scaffold(
+        containerColor = androidx.compose.ui.graphics.Color.Transparent,
         bottomBar = {
-            NavigationBar {
+            NavigationBar(tonalElevation = 4.dp) {
                 MainTab.entries.forEach { tab ->
                     NavigationBarItem(
                         selected = selectedTab == tab,
                         onClick = { selectedTab = tab },
-                        label = { Text(tab.title) },
-                        icon = { Text(tab.title.take(1)) }
+                        label = { Text(stringResource(tab.titleRes)) },
+                        icon = { Text(stringResource(tab.titleRes).take(1)) }
                     )
                 }
             }
@@ -322,74 +383,105 @@ private fun MainScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(12.dp)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             if (hasMissingPermission) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = "检测到权限缺失，监控和锁定可能失效",
-                            color = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (!usageGranted) {
-                                Button(onClick = {
-                                    context.startActivity(
-                                        Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
-                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                        }
-                                    )
-                                }) {
-                                    Text("去授权使用记录")
-                                }
-                            }
-                            if (!overlayGranted) {
-                                Button(onClick = {
-                                    context.startActivity(
-                                        Intent(
-                                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                            Uri.parse("package:${context.packageName}")
-                                        ).apply {
-                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                        }
-                                    )
-                                }) {
-                                    Text("去授权悬浮窗")
-                                }
-                            }
-                        }
-                    }
-                }
-                Spacer(Modifier.height(8.dp))
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("监控服务")
-                Switch(
-                    checked = monitorEnabled,
-                    onCheckedChange = {
-                        monitorEnabled = it
-                        if (it) MonitorService.startService(context) else MonitorService.stopService(context)
-                    }
+                MissingPermissionCard(
+                    usageGranted = usageGranted,
+                    overlayGranted = overlayGranted,
+                    context = context
                 )
             }
-            Spacer(Modifier.height(8.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(stringResource(R.string.monitor_service_title), style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            if (monitorEnabled) stringResource(R.string.monitor_service_running) else stringResource(R.string.monitor_service_stopped),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                    }
+                    Switch(
+                        checked = monitorEnabled,
+                        onCheckedChange = {
+                            monitorEnabled = it
+                            MonitorPreferences.setMonitorEnabled(context, it)
+                            if (it && !hasMissingPermission) {
+                                MonitorService.startService(context)
+                            } else {
+                                MonitorService.stopService(context)
+                            }
+                        }
+                    )
+                }
+            }
+
             when (selectedTab) {
                 MainTab.Apps -> AppListScreen(viewModel, onOpenRule)
                 MainTab.Stats -> StatsScreen(viewModel)
                 MainTab.Settings -> SettingsScreen(viewModel)
+            }
+        }
+    }
+}
+
+@Composable
+private fun MissingPermissionCard(
+    usageGranted: Boolean,
+    overlayGranted: Boolean,
+    context: Context
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.permission_missing_hint),
+                color = MaterialTheme.colorScheme.onErrorContainer
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (!usageGranted) {
+                    Button(onClick = {
+                        context.startActivity(
+                            Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                        )
+                    }) {
+                        Text(stringResource(R.string.permission_grant_usage_action))
+                    }
+                }
+                if (!overlayGranted) {
+                    Button(onClick = {
+                        context.startActivity(
+                            Intent(
+                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                Uri.parse("package:${context.packageName}")
+                            ).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                        )
+                    }) {
+                        Text(stringResource(R.string.permission_grant_overlay_action))
+                    }
+                }
             }
         }
     }
@@ -401,32 +493,64 @@ private fun AppListScreen(
     onOpenRule: (String) -> Unit
 ) {
     val apps by viewModel.appListUi.collectAsState()
+    val loading by viewModel.loading.collectAsState()
     var keyword by rememberSaveable { mutableStateOf("") }
     var authTarget by remember { mutableStateOf<AppListItemUi?>(null) }
     var authRulePackage by remember { mutableStateOf<String?>(null) }
+
+    val filteredApps = apps.filter {
+        it.appName.contains(keyword, ignoreCase = true) ||
+            it.packageName.contains(keyword, ignoreCase = true)
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedTextField(
             value = keyword,
             onValueChange = { keyword = it },
-            label = { Text("搜索应用") },
-            modifier = Modifier.fillMaxWidth()
+            label = { Text(stringResource(R.string.app_search_label)) },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
         )
 
+        if (loading) {
+            Text(
+                stringResource(R.string.app_loading),
+                color = MaterialTheme.colorScheme.secondary,
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+
+        if (!loading && filteredApps.isEmpty()) {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    stringResource(R.string.app_empty),
+                    modifier = Modifier.padding(16.dp),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+        }
+
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(
-                items = apps.filter {
-                    it.appName.contains(keyword, ignoreCase = true) || it.packageName.contains(keyword, ignoreCase = true)
-                },
-                key = { it.packageName }
-            ) { item ->
-                Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            items(items = filteredApps, key = { it.packageName }) { item ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
                         Text(item.appName, style = MaterialTheme.typography.titleMedium)
                         Text(item.packageName, style = MaterialTheme.typography.bodySmall)
                         Text(
-                            if (item.usageLimitMinutes != null) "时长限制: ${item.usageLimitMinutes} 分钟" else "时长限制: 未设置",
-                            style = MaterialTheme.typography.bodySmall
+                            if (item.usageLimitMinutes != null) {
+                                stringResource(R.string.app_limit_minutes, item.usageLimitMinutes)
+                            } else {
+                                stringResource(R.string.app_limit_unset)
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.secondary
                         )
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -434,18 +558,16 @@ private fun AppListScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("受控")
+                                Text(stringResource(R.string.app_controlled_label))
                                 Spacer(Modifier.width(6.dp))
                                 Switch(
                                     checked = item.isTarget,
-                                    onCheckedChange = {
-                                        authTarget = item.copy(isTarget = it)
-                                    }
+                                    onCheckedChange = { authTarget = item.copy(isTarget = it) }
                                 )
                             }
                             if (item.isTarget) {
                                 Text(
-                                    "规则设置",
+                                    stringResource(R.string.app_rule_action),
                                     color = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.clickable { authRulePackage = item.packageName }
                                 )
@@ -459,7 +581,7 @@ private fun AppListScreen(
 
     if (authTarget != null) {
         AuthDialog(
-            title = "身份验证",
+            title = stringResource(R.string.auth_title),
             onDismiss = { authTarget = null },
             onVerified = {
                 val target = authTarget
@@ -474,7 +596,7 @@ private fun AppListScreen(
 
     if (authRulePackage != null) {
         AuthDialog(
-            title = "验证后进入规则设置",
+            title = stringResource(R.string.auth_rule_title),
             onDismiss = { authRulePackage = null },
             onVerified = {
                 val targetPackage = authRulePackage
@@ -508,54 +630,61 @@ private fun AppRuleScreen(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Text(target?.appName ?: packageName, style = MaterialTheme.typography.headlineSmall)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("白名单")
-            Spacer(Modifier.width(8.dp))
-            Switch(
-                checked = target?.isWhitelisted == true,
-                onCheckedChange = { checked ->
-                    pendingAction = {
-                        viewModel.toggleWhitelist(packageName, checked, target?.appName)
+
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(stringResource(R.string.rule_whitelist), style = MaterialTheme.typography.bodyLarge)
+                Switch(
+                    checked = target?.isWhitelisted == true,
+                    onCheckedChange = { checked ->
+                        pendingAction = { viewModel.toggleWhitelist(packageName, checked, target?.appName) }
                     }
-                }
-            )
+                )
+            }
         }
 
         OutlinedTextField(
             value = limitInput,
             onValueChange = { limitInput = it.filter(Char::isDigit) },
-            label = { Text("每日时长限制（分钟）") },
-            modifier = Modifier.fillMaxWidth()
+            label = { Text(stringResource(R.string.rule_limit_label)) },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
         )
         Button(onClick = {
             val minutes = limitInput.toIntOrNull()
             pendingAction = { viewModel.setUsageLimit(packageName, minutes) }
         }) {
-            Text("保存时长限制")
+            Text(stringResource(R.string.rule_save_limit))
         }
 
-        Text("允许时间段", style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.rule_period_title), style = MaterialTheme.typography.titleMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
                 value = startTime,
                 onValueChange = { startTime = it },
-                label = { Text("开始 HH:mm") },
-                modifier = Modifier.weight(1f)
+                label = { Text(stringResource(R.string.rule_period_start)) },
+                modifier = Modifier.weight(1f),
+                singleLine = true
             )
             OutlinedTextField(
                 value = endTime,
                 onValueChange = { endTime = it },
-                label = { Text("结束 HH:mm") },
-                modifier = Modifier.weight(1f)
+                label = { Text(stringResource(R.string.rule_period_end)) },
+                modifier = Modifier.weight(1f),
+                singleLine = true
             )
         }
         Button(onClick = {
             pendingAction = { viewModel.addAllowedPeriod(packageName, startTime, endTime) }
         }) {
-            Text("添加时间段")
+            Text(stringResource(R.string.rule_add_period))
         }
 
         LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -570,7 +699,7 @@ private fun AppRuleScreen(
                     ) {
                         Text("${period.startTime} - ${period.endTime}")
                         Text(
-                            "删除",
+                            stringResource(R.string.common_delete),
                             color = MaterialTheme.colorScheme.error,
                             modifier = Modifier.clickable {
                                 pendingAction = { viewModel.removeAllowedPeriod(period) }
@@ -584,7 +713,7 @@ private fun AppRuleScreen(
 
     if (pendingAction != null) {
         AuthDialog(
-            title = "验证后修改规则",
+            title = stringResource(R.string.auth_modify_rule_title),
             onDismiss = { pendingAction = null },
             onVerified = {
                 pendingAction?.invoke()
@@ -604,39 +733,42 @@ private fun StatsScreen(viewModel: AppViewModel) {
     var dateInput by rememberSaveable(selectedDate) { mutableStateOf(selectedDate) }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("每日统计", style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.stats_daily_title), style = MaterialTheme.typography.titleMedium)
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(
                 value = dateInput,
                 onValueChange = { dateInput = it },
-                label = { Text("日期 yyyy-MM-dd") },
-                modifier = Modifier.weight(1f)
+                label = { Text(stringResource(R.string.stats_date_label)) },
+                modifier = Modifier.weight(1f),
+                singleLine = true
             )
             Spacer(Modifier.width(8.dp))
             Button(onClick = {
                 runCatching { LocalDate.parse(dateInput, DateTimeFormatter.ofPattern("yyyy-MM-dd")) }
                     .onSuccess { viewModel.setDate(dateInput) }
-            }) { Text("查看") }
+            }) {
+                Text(stringResource(R.string.stats_view_action))
+            }
         }
 
         LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             items(daily, key = { "${it.packageName}_${it.date}" }) { record ->
                 Card(modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(10.dp)) {
+                    Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(record.packageName, style = MaterialTheme.typography.titleSmall)
-                        Text("时长: ${record.usageDurationSeconds / 60} 分钟")
-                        Text("打开次数: ${record.openCount}")
+                        Text(stringResource(R.string.stats_duration_minutes, record.usageDurationSeconds / 60))
+                        Text(stringResource(R.string.stats_open_count, record.openCount))
                     }
                 }
             }
         }
 
-        Text("近7天总时长（分钟）", style = MaterialTheme.typography.titleMedium)
+        Text(stringResource(R.string.stats_weekly_title), style = MaterialTheme.typography.titleMedium)
         val grouped = weekly.groupBy { it.date }.mapValues { entry ->
             entry.value.sumOf { it.usageDurationSeconds } / 60
         }.toSortedMap()
         grouped.forEach { (date, minutes) ->
-            Text("$date: $minutes")
+            Text(stringResource(R.string.stats_weekly_item, date, minutes))
         }
     }
 }
@@ -652,61 +784,103 @@ private fun SettingsScreen(viewModel: AppViewModel) {
     var showChangePwd by remember { mutableStateOf(false) }
     val isDeviceAdminActive = PermissionUtils.isDeviceAdminActive(context)
 
+    var languageTag by remember { mutableStateOf(LocaleManager.getSavedLanguage(context)) }
+
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("生物识别")
-            Spacer(Modifier.width(8.dp))
-            Switch(
-                checked = settings?.biometricEnabled == true,
-                onCheckedChange = { showAuthForToggle = true }
-            )
-        }
+        SettingSwitchRow(
+            title = stringResource(R.string.settings_biometric),
+            checked = settings?.biometricEnabled == true,
+            onCheckedChange = { showAuthForToggle = true }
+        )
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("强制锁定模式")
-            Spacer(Modifier.width(8.dp))
-            Switch(
-                checked = settings?.forcedLockEnabled == true,
-                onCheckedChange = {
-                    if (it && !isDeviceAdminActive) {
-                        val component = ComponentName(context, AppDeviceAdminReceiver::class.java)
-                        val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
-                            putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, component)
-                            putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, "强制锁定模式需要设备管理器权限")
-                        }
-                        context.startActivity(intent)
-                    } else {
-                        pendingForcedLockValue = it
-                        showAuthForForcedLock = true
+        SettingSwitchRow(
+            title = stringResource(R.string.settings_forced_lock),
+            checked = settings?.forcedLockEnabled == true,
+            onCheckedChange = {
+                if (it && !isDeviceAdminActive) {
+                    val component = ComponentName(context, AppDeviceAdminReceiver::class.java)
+                    val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
+                        putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, component)
+                        putExtra(
+                            DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                            context.getString(R.string.settings_forced_lock_admin_hint)
+                        )
                     }
+                    context.startActivity(intent)
+                } else {
+                    pendingForcedLockValue = it
+                    showAuthForForcedLock = true
                 }
-            )
+            }
+        )
+
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(stringResource(R.string.settings_language), style = MaterialTheme.typography.titleMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    LanguageButton(
+                        selected = languageTag == LocaleManager.LANGUAGE_SYSTEM,
+                        label = stringResource(R.string.settings_language_system),
+                        onClick = {
+                            languageTag = LocaleManager.LANGUAGE_SYSTEM
+                            LocaleManager.setLanguage(context, LocaleManager.LANGUAGE_SYSTEM)
+                        }
+                    )
+                    LanguageButton(
+                        selected = languageTag == LocaleManager.LANGUAGE_ZH,
+                        label = stringResource(R.string.settings_language_zh),
+                        onClick = {
+                            languageTag = LocaleManager.LANGUAGE_ZH
+                            LocaleManager.setLanguage(context, LocaleManager.LANGUAGE_ZH)
+                        }
+                    )
+                    LanguageButton(
+                        selected = languageTag == LocaleManager.LANGUAGE_EN,
+                        label = stringResource(R.string.settings_language_en),
+                        onClick = {
+                            languageTag = LocaleManager.LANGUAGE_EN
+                            LocaleManager.setLanguage(context, LocaleManager.LANGUAGE_EN)
+                        }
+                    )
+                }
+            }
         }
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("设备管理器")
-            Spacer(Modifier.width(8.dp))
-            Text(if (isDeviceAdminActive) "已启用" else "未启用")
-            Spacer(Modifier.width(8.dp))
-            if (isDeviceAdminActive) {
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(stringResource(R.string.settings_device_admin), style = MaterialTheme.typography.bodyLarge)
+                Spacer(Modifier.width(8.dp))
                 Text(
-                    "解除授权",
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.clickable { showAuthForDisableAdmin = true }
+                    if (isDeviceAdminActive) stringResource(R.string.settings_enabled)
+                    else stringResource(R.string.settings_disabled)
                 )
+                Spacer(Modifier.width(8.dp))
+                if (isDeviceAdminActive) {
+                    Text(
+                        stringResource(R.string.settings_disable_admin),
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.clickable { showAuthForDisableAdmin = true }
+                    )
+                }
             }
         }
 
         Button(onClick = { showChangePwd = true }) {
-            Text("修改管理密码")
+            Text(stringResource(R.string.settings_change_password))
         }
 
-        Text("版本: 1.0")
+        Text(stringResource(R.string.settings_version, "1.0"), style = MaterialTheme.typography.bodyMedium)
     }
 
     if (showAuthForToggle) {
         AuthDialog(
-            title = "验证后切换生物识别",
+            title = stringResource(R.string.auth_toggle_biometric_title),
             onDismiss = { showAuthForToggle = false },
             onVerified = {
                 viewModel.setBiometricEnabled(!(settings?.biometricEnabled ?: false))
@@ -727,7 +901,7 @@ private fun SettingsScreen(viewModel: AppViewModel) {
 
     if (showAuthForForcedLock) {
         AuthDialog(
-            title = "验证后切换强制锁定",
+            title = stringResource(R.string.auth_toggle_forced_lock_title),
             onDismiss = {
                 pendingForcedLockValue = null
                 showAuthForForcedLock = false
@@ -743,20 +917,62 @@ private fun SettingsScreen(viewModel: AppViewModel) {
 
     if (showAuthForDisableAdmin) {
         AuthDialog(
-            title = "验证后解除设备管理器",
+            title = stringResource(R.string.auth_disable_admin_title),
             onDismiss = { showAuthForDisableAdmin = false },
             onVerified = {
                 DeviceAdminAuthGate.authorizeDisable(context)
                 val component = ComponentName(context, AppDeviceAdminReceiver::class.java)
                 val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
                     putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, component)
-                    putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, "已完成身份验证，请在系统页面停用设备管理器")
+                    putExtra(
+                        DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                        context.getString(R.string.auth_disable_admin_explanation)
+                    )
                 }
                 context.startActivity(intent)
                 showAuthForDisableAdmin = false
             },
             verify = viewModel::verifyPassword
         )
+    }
+}
+
+@Composable
+private fun SettingSwitchRow(
+    title: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Switch(checked = checked, onCheckedChange = onCheckedChange)
+        }
+    }
+}
+
+@Composable
+private fun LanguageButton(
+    selected: Boolean,
+    label: String,
+    onClick: () -> Unit
+) {
+    TextButton(
+        onClick = onClick,
+        modifier = Modifier
+            .background(
+                if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                else androidx.compose.ui.graphics.Color.Transparent,
+                shape = MaterialTheme.shapes.small
+            )
+    ) {
+        Text(label)
     }
 }
 
@@ -770,28 +986,30 @@ private fun ChangePasswordDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("修改密码") },
+        title = { Text(stringResource(R.string.settings_change_password)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = oldPwd,
                     onValueChange = { oldPwd = it },
-                    label = { Text("旧密码") },
-                    visualTransformation = PasswordVisualTransformation()
+                    label = { Text(stringResource(R.string.change_password_old)) },
+                    visualTransformation = PasswordVisualTransformation(),
+                    singleLine = true
                 )
                 OutlinedTextField(
                     value = newPwd,
                     onValueChange = { newPwd = it },
-                    label = { Text("新密码（至少4位）") },
-                    visualTransformation = PasswordVisualTransformation()
+                    label = { Text(stringResource(R.string.change_password_new)) },
+                    visualTransformation = PasswordVisualTransformation(),
+                    singleLine = true
                 )
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(oldPwd, newPwd) }) { Text("确认") }
+            TextButton(onClick = { onConfirm(oldPwd, newPwd) }) { Text(stringResource(R.string.common_confirm)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) }
         }
     )
 }
@@ -803,6 +1021,7 @@ private fun AuthDialog(
     onVerified: () -> Unit,
     verify: (String, (VerifyPasswordUseCase.VerifyResult) -> Unit) -> Unit
 ) {
+    val context = LocalContext.current
     var password by rememberSaveable { mutableStateOf("") }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
 
@@ -814,9 +1033,10 @@ private fun AuthDialog(
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it },
-                    label = { Text("管理密码") },
+                    label = { Text(stringResource(R.string.auth_password_label)) },
                     visualTransformation = PasswordVisualTransformation(),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
                 )
                 if (error != null) {
                     Text(error!!, color = MaterialTheme.colorScheme.error)
@@ -829,19 +1049,19 @@ private fun AuthDialog(
                     when (result) {
                         is VerifyPasswordUseCase.VerifyResult.Success -> onVerified()
                         is VerifyPasswordUseCase.VerifyResult.WrongPassword -> {
-                            error = "密码错误，剩余 ${result.remainingAttempts} 次"
+                            error = context.getString(R.string.auth_wrong_password, result.remainingAttempts)
                         }
                         is VerifyPasswordUseCase.VerifyResult.LockedOut -> {
-                            error = "已锁定，请稍后重试"
+                            error = context.getString(R.string.auth_locked)
                         }
                     }
                 }
             }) {
-                Text("验证")
+                Text(stringResource(R.string.auth_verify_action))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) }
         }
     )
 }

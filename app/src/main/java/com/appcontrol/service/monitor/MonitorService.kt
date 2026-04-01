@@ -5,6 +5,7 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -100,6 +101,10 @@ class MonitorService : LifecycleService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
+        if (!MonitorPreferences.isMonitorEnabled(this)) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
         startPolling()
         scheduleMidnightAlarm()
         return START_STICKY
@@ -208,14 +213,29 @@ class MonitorService : LifecycleService() {
     private fun getForegroundPackageName(): String? {
         val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val endTime = System.currentTimeMillis()
-        val beginTime = endTime - 1000
+        val beginTime = endTime - 10_000
+
+        val events = usageStatsManager.queryEvents(beginTime, endTime)
+        val event = UsageEvents.Event()
+        var packageName: String? = null
+        while (events.hasNextEvent()) {
+            events.getNextEvent(event)
+            if (
+                event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND ||
+                event.eventType == UsageEvents.Event.ACTIVITY_RESUMED
+            ) {
+                packageName = event.packageName
+            }
+        }
+        if (!packageName.isNullOrBlank()) {
+            return packageName
+        }
 
         val usageStats = usageStatsManager.queryUsageStats(
             UsageStatsManager.INTERVAL_DAILY,
             beginTime,
             endTime
         )
-
         if (usageStats.isNullOrEmpty()) return null
 
         return usageStats

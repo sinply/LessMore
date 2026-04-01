@@ -1,25 +1,113 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Lessmore</string>
-    <string name="monitor_channel_name">应用监控服务</string>
-    <string name="monitor_channel_description">持续监控目标应用的使用状态</string>
-    <string name="monitor_notification_title">Lessmore 运行中</string>
-    <string name="monitor_notification_text">正在监控目标应用使用情况</string>
-    <string name="warning_channel_name">使用提醒</string>
-    <string name="warning_channel_description">应用使用时长达到限制的80%时提醒</string>
-    <string name="warning_notification_title">使用时长提醒</string>
-    <string name="warning_notification_text">%1$s 的使用时长已达到限制的80%%，请注意控制使用时间</string>
-    <string name="lock_usage_limit_title">今日使用时长已达上限</string>
-    <string name="lock_usage_limit_detail">已使用 %1$s</string>
-    <string name="lock_outside_period_title">当前时间段不允许使用</string>
-    <string name="lock_outside_period_detail">下一个允许时间段: %1$s</string>
-    <string name="lock_outside_period_no_next">今日无更多允许使用时间段</string>
-    <string name="lock_go_home">返回桌面</string>
-    <string name="lock_forced_message">限制条件解除前无法退出</string>
-    <string name="device_admin_label">Lessmore 设备管理器</string>
-    <string name="device_admin_description">用于防卸载、防绕过和强制锁定保护</string>
-    <string name="device_admin_enabled">设备管理器已启用</string>
-    <string name="device_admin_disabled">设备管理器已停用</string>
-    <string name="device_admin_disable_requires_auth">请先在应用内完成身份验证，再停用设备管理器</string>
-    <string name="device_admin_disable_authorized">身份验证已通过，可继续停用设备管理器</string>
+
+    <string name="monitor_channel_name">App monitoring service</string>
+    <string name="monitor_channel_description">Continuously monitor usage status of target apps</string>
+    <string name="monitor_notification_title">Lessmore is running</string>
+    <string name="monitor_notification_text">Monitoring target app usage</string>
+    <string name="warning_channel_name">Usage warning</string>
+    <string name="warning_channel_description">Warn when app usage reaches 80% of the limit</string>
+    <string name="warning_notification_title">Usage time warning</string>
+    <string name="warning_notification_text">%1$s has reached 80%% of its usage limit</string>
+
+    <string name="lock_usage_limit_title">Today\'s usage limit has been reached</string>
+    <string name="lock_usage_limit_detail">Used %1$s</string>
+    <string name="lock_outside_period_title">App is unavailable at this time</string>
+    <string name="lock_outside_period_detail">Next allowed period: %1$s</string>
+    <string name="lock_outside_period_no_next">No more allowed period today</string>
+    <string name="lock_go_home">Go Home</string>
+    <string name="lock_forced_message">You cannot exit until restrictions are removed</string>
+
+    <string name="device_admin_label">Lessmore Device Admin</string>
+    <string name="device_admin_description">Used for anti-uninstall, anti-bypass and forced lock protection</string>
+    <string name="device_admin_enabled">Device admin enabled</string>
+    <string name="device_admin_disabled">Device admin disabled</string>
+    <string name="device_admin_disable_requires_auth">Please complete identity verification in app before disabling device admin</string>
+    <string name="device_admin_disable_authorized">Verification complete, you can continue to disable device admin</string>
+
+    <string name="onboarding_title">Permission Setup</string>
+    <string name="onboarding_subtitle">Grant required permissions to keep monitoring and lock features working reliably.</string>
+    <string name="permission_usage_title">Usage access permission</string>
+    <string name="permission_overlay_title">Overlay permission</string>
+    <string name="permission_admin_title">Device admin permission (recommended for forced lock)</string>
+    <string name="permission_admin_explanation">Required for anti-uninstall and anti-bypass protection</string>
+    <string name="permission_granted">Granted</string>
+    <string name="permission_not_granted">Not granted</string>
+    <string name="permission_check_again">Re-check</string>
+    <string name="permission_go_grant">Grant</string>
+    <string name="permission_missing_hint">Required permissions are missing. Monitoring and lock features may not work correctly.</string>
+    <string name="permission_grant_usage_action">Grant usage access</string>
+    <string name="permission_grant_overlay_action">Grant overlay</string>
+
+    <string name="common_continue">Continue</string>
+    <string name="common_done">Done</string>
+    <string name="common_delete">Delete</string>
+    <string name="common_confirm">Confirm</string>
+    <string name="common_cancel">Cancel</string>
+
+    <string name="set_password_title">Set Admin Password</string>
+    <string name="set_password_input">Password (at least 4 chars)</string>
+    <string name="set_password_confirm">Confirm password</string>
+
+    <string name="tab_apps">Apps</string>
+    <string name="tab_stats">Stats</string>
+    <string name="tab_settings">Settings</string>
+
+    <string name="monitor_service_title">Monitor service</string>
+    <string name="monitor_service_running">Running</string>
+    <string name="monitor_service_stopped">Stopped</string>
+
+    <string name="app_search_label">Search apps</string>
+    <string name="app_loading">Loading app list…</string>
+    <string name="app_empty">No installed apps found. Please check package visibility permission and try again.</string>
+    <string name="app_limit_minutes">Usage limit: %1$d min</string>
+    <string name="app_limit_unset">Usage limit: not set</string>
+    <string name="app_controlled_label">Controlled</string>
+    <string name="app_rule_action">Configure rules</string>
+
+    <string name="auth_title">Identity verification</string>
+    <string name="auth_rule_title">Verify before opening rule settings</string>
+    <string name="auth_modify_rule_title">Verify before changing rules</string>
+    <string name="auth_toggle_biometric_title">Verify before toggling biometric</string>
+    <string name="auth_toggle_forced_lock_title">Verify before toggling forced lock</string>
+    <string name="auth_disable_admin_title">Verify before disabling device admin</string>
+    <string name="auth_disable_admin_explanation">Verification complete. You can disable device admin on the system screen.</string>
+    <string name="auth_password_label">Admin password</string>
+    <string name="auth_verify_action">Verify</string>
+    <string name="auth_wrong_password">Wrong password, %1$d attempts left</string>
+    <string name="auth_locked">Locked. Please try again later.</string>
+
+    <string name="rule_whitelist">Whitelist</string>
+    <string name="rule_limit_label">Daily usage limit (minutes)</string>
+    <string name="rule_save_limit">Save usage limit</string>
+    <string name="rule_period_title">Allowed periods</string>
+    <string name="rule_period_start">Start HH:mm</string>
+    <string name="rule_period_end">End HH:mm</string>
+    <string name="rule_add_period">Add period</string>
+
+    <string name="stats_daily_title">Daily stats</string>
+    <string name="stats_date_label">Date yyyy-MM-dd</string>
+    <string name="stats_view_action">View</string>
+    <string name="stats_duration_minutes">Duration: %1$d min</string>
+    <string name="stats_open_count">Open count: %1$d</string>
+    <string name="stats_weekly_title">Total duration in last 7 days (min)</string>
+    <string name="stats_weekly_item">%1$s: %2$d</string>
+
+    <string name="settings_biometric">Biometric</string>
+    <string name="settings_forced_lock">Forced lock mode</string>
+    <string name="settings_forced_lock_admin_hint">Forced lock mode requires device admin permission</string>
+    <string name="settings_language">Language</string>
+    <string name="settings_language_system">System</string>
+    <string name="settings_language_zh">中文</string>
+    <string name="settings_language_en">English</string>
+    <string name="settings_device_admin">Device admin</string>
+    <string name="settings_enabled">Enabled</string>
+    <string name="settings_disabled">Disabled</string>
+    <string name="settings_disable_admin">Disable</string>
+    <string name="settings_change_password">Change admin password</string>
+    <string name="settings_version">Version: %1$s</string>
+
+    <string name="change_password_old">Old password</string>
+    <string name="change_password_new">New password (at least 4 chars)</string>
 </resources>
