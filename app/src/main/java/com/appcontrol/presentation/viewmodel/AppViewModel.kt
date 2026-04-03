@@ -1,7 +1,9 @@
 package com.appcontrol.presentation.viewmodel
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.appcontrol.R
 import com.appcontrol.data.db.AllowedPeriod
 import com.appcontrol.data.db.TargetApp
 import com.appcontrol.data.db.UsageRecord
@@ -22,6 +24,7 @@ import com.appcontrol.domain.usecase.ToggleWhitelistUseCase
 import com.appcontrol.domain.usecase.VerifyPasswordUseCase
 import com.appcontrol.domain.usecase.RemoveTargetAppUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
@@ -40,6 +43,7 @@ import kotlinx.coroutines.launch
 @HiltViewModel
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class AppViewModel @Inject constructor(
+    @ApplicationContext private val appContext: Context,
     private val appRepository: AppRepository,
     private val authRepository: AuthRepository,
     private val getInstalledAppsUseCase: GetInstalledAppsUseCase,
@@ -119,7 +123,8 @@ class AppViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            authRepository.initializeSettings()
+            runCatching { authRepository.initializeSettings() }
+                .onFailure { _message.value = appContext.getString(R.string.error_init_settings_failed) }
             loadInstalledApps()
         }
     }
@@ -129,7 +134,7 @@ class AppViewModel @Inject constructor(
         viewModelScope.launch {
             runCatching { getInstalledAppsUseCase() }
                 .onSuccess { _installedApps.value = it }
-                .onFailure { _message.value = it.message ?: "加载应用列表失败" }
+                .onFailure { _message.value = appContext.getString(R.string.error_load_apps_failed) }
             _loading.update { false }
         }
     }
@@ -156,7 +161,7 @@ class AppViewModel @Inject constructor(
                     removeTargetAppUseCase(item.packageName)
                 }
             }.onFailure {
-                _message.value = it.message ?: "更新受控应用失败"
+                _message.value = appContext.getString(R.string.error_update_target_app_failed)
             }
         }
     }
@@ -164,14 +169,14 @@ class AppViewModel @Inject constructor(
     fun toggleWhitelist(packageName: String, enabled: Boolean, appName: String? = null) {
         viewModelScope.launch {
             runCatching { toggleWhitelistUseCase(packageName, enabled, appName) }
-                .onFailure { _message.value = it.message ?: "更新白名单失败" }
+                .onFailure { _message.value = appContext.getString(R.string.error_update_whitelist_failed) }
         }
     }
 
     fun setUsageLimit(packageName: String, minutes: Int?) {
         viewModelScope.launch {
             runCatching { setUsageLimitUseCase(packageName, minutes) }
-                .onFailure { _message.value = it.message ?: "设置时长失败" }
+                .onFailure { _message.value = appContext.getString(R.string.error_set_usage_limit_failed) }
         }
     }
 
@@ -193,14 +198,14 @@ class AppViewModel @Inject constructor(
                         endTime = endTime
                     )
                 )
-            }.onFailure { _message.value = it.message ?: "新增时间段失败" }
+            }.onFailure { _message.value = appContext.getString(R.string.error_add_period_failed) }
         }
     }
 
     fun removeAllowedPeriod(period: AllowedPeriod) {
         viewModelScope.launch {
             runCatching { manageAllowedPeriodsUseCase.removePeriod(period) }
-                .onFailure { _message.value = it.message ?: "删除时间段失败" }
+                .onFailure { _message.value = appContext.getString(R.string.error_remove_period_failed) }
         }
     }
 
@@ -214,14 +219,16 @@ class AppViewModel @Inject constructor(
             }.onSuccess {
                 onSuccess()
             }.onFailure {
-                _message.value = it.message ?: "设置密码失败"
+                _message.value = appContext.getString(R.string.error_set_password_failed)
             }
         }
     }
 
     fun verifyPassword(password: String, onResult: (VerifyPasswordUseCase.VerifyResult) -> Unit) {
         viewModelScope.launch {
-            onResult(verifyPasswordUseCase(password))
+            runCatching { verifyPasswordUseCase(password) }
+                .onSuccess(onResult)
+                .onFailure { _message.value = appContext.getString(R.string.error_verify_password_failed) }
         }
     }
 
@@ -232,24 +239,24 @@ class AppViewModel @Inject constructor(
                     if (success) {
                         onSuccess()
                     } else {
-                        _message.value = "旧密码不正确"
+                        _message.value = appContext.getString(R.string.error_old_password_wrong)
                     }
                 }
-                .onFailure { _message.value = it.message ?: "修改密码失败" }
+                .onFailure { _message.value = appContext.getString(R.string.error_change_password_failed) }
         }
     }
 
     fun setBiometricEnabled(enabled: Boolean) {
         viewModelScope.launch {
             runCatching { toggleBiometricUseCase(enabled) }
-                .onFailure { _message.value = it.message ?: "更新生物识别设置失败" }
+                .onFailure { _message.value = appContext.getString(R.string.error_update_biometric_failed) }
         }
     }
 
     fun setForcedLockEnabled(enabled: Boolean) {
         viewModelScope.launch {
             runCatching { authRepository.setForcedLockEnabled(enabled) }
-                .onFailure { _message.value = it.message ?: "更新强制锁定设置失败" }
+                .onFailure { _message.value = appContext.getString(R.string.error_update_forced_lock_failed) }
         }
     }
 }

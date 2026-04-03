@@ -14,7 +14,7 @@ interface AllowedPeriodDao {
     fun getByPackageName(packageName: String): Flow<List<AllowedPeriod>>
 
     @Query("SELECT * FROM allowed_periods WHERE packageName = :packageName")
-    fun getByPackageNameSync(packageName: String): List<AllowedPeriod>
+    suspend fun getByPackageNameSync(packageName: String): List<AllowedPeriod>
 
     @Insert
     suspend fun insert(period: AllowedPeriod)

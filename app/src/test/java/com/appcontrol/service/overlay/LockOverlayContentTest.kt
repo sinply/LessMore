@@ -8,31 +8,31 @@ import io.kotest.property.checkAll
 
 class LockOverlayContentTest : FunSpec({
 
-    test("formatDuration returns minutes only when less than 1 hour") {
-        formatDuration(0) shouldBe "0分钟"
-        formatDuration(59) shouldBe "0分钟"
-        formatDuration(60) shouldBe "1分钟"
-        formatDuration(300) shouldBe "5分钟"
-        formatDuration(3599) shouldBe "59分钟"
+    test("formatDurationPlain returns minutes only when less than 1 hour") {
+        formatDurationPlain(0) shouldBe "0m"
+        formatDurationPlain(59) shouldBe "0m"
+        formatDurationPlain(60) shouldBe "1m"
+        formatDurationPlain(300) shouldBe "5m"
+        formatDurationPlain(3599) shouldBe "59m"
     }
 
-    test("formatDuration returns hours and minutes when 1 hour or more") {
-        formatDuration(3600) shouldBe "1小时0分钟"
-        formatDuration(3660) shouldBe "1小时1分钟"
-        formatDuration(7200) shouldBe "2小时0分钟"
-        formatDuration(7380) shouldBe "2小时3分钟"
-        formatDuration(86399) shouldBe "23小时59分钟"
+    test("formatDurationPlain returns hours and minutes when 1 hour or more") {
+        formatDurationPlain(3600) shouldBe "1h 0m"
+        formatDurationPlain(3660) shouldBe "1h 1m"
+        formatDurationPlain(7200) shouldBe "2h 0m"
+        formatDurationPlain(7380) shouldBe "2h 3m"
+        formatDurationPlain(86399) shouldBe "23h 59m"
     }
 
-    test("formatDuration property: hours component equals totalSeconds / 3600") {
+    test("formatDurationPlain property: hours component equals totalSeconds / 3600") {
         checkAll(Arb.long(0L..86400L)) { seconds ->
-            val result = formatDuration(seconds)
+            val result = formatDurationPlain(seconds)
             val expectedHours = seconds / 3600
             val expectedMinutes = (seconds % 3600) / 60
             if (expectedHours > 0) {
-                result shouldBe "${expectedHours}小时${expectedMinutes}分钟"
+                result shouldBe "${expectedHours}h ${expectedMinutes}m"
             } else {
-                result shouldBe "${expectedMinutes}分钟"
+                result shouldBe "${expectedMinutes}m"
             }
         }
     }

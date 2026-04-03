@@ -18,6 +18,7 @@
     <string name="lock_outside_period_no_next">今日无更多允许使用时间段</string>
     <string name="lock_go_home">返回桌面</string>
     <string name="lock_forced_message">限制条件解除前无法退出</string>
+    <string name="lock_auto_unlock_message">限制解除后将自动解锁</string>
 
     <string name="device_admin_label">Lessmore 设备管理器</string>
     <string name="device_admin_description">用于防卸载、防绕过和强制锁定保护</string>
@@ -110,4 +111,23 @@
 
     <string name="change_password_old">旧密码</string>
     <string name="change_password_new">新密码（至少4位）</string>
+
+    <!-- Duration format -->
+    <string name="duration_hours_minutes">%1$d小时 %2$d分钟</string>
+    <string name="duration_minutes">%1$d分钟</string>
+
+    <!-- Error messages -->
+    <string name="error_init_settings_failed">初始化设置失败</string>
+    <string name="error_load_apps_failed">加载应用列表失败</string>
+    <string name="error_update_target_app_failed">更新受控应用失败</string>
+    <string name="error_update_whitelist_failed">更新白名单失败</string>
+    <string name="error_set_usage_limit_failed">设置时长失败</string>
+    <string name="error_add_period_failed">新增时间段失败</string>
+    <string name="error_remove_period_failed">删除时间段失败</string>
+    <string name="error_set_password_failed">设置密码失败</string>
+    <string name="error_verify_password_failed">验证密码失败</string>
+    <string name="error_old_password_wrong">旧密码不正确</string>
+    <string name="error_change_password_failed">修改密码失败</string>
+    <string name="error_update_biometric_failed">更新生物识别设置失败</string>
+    <string name="error_update_forced_lock_failed">更新强制锁定设置失败</string>
 </resources>

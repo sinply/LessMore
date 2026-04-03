@@ -35,7 +35,7 @@ class FakeRuleRepository : RuleRepository {
     override suspend fun setUsageLimit(packageName: String, limitMinutes: Int?) {}
     override fun getAllowedPeriods(packageName: String): Flow<List<AllowedPeriod>> =
         flowOf(periods[packageName] ?: emptyList())
-    override fun getAllowedPeriodsSync(packageName: String): List<AllowedPeriod> =
+    override suspend fun getAllowedPeriodsSync(packageName: String): List<AllowedPeriod> =
         periods[packageName] ?: emptyList()
     override suspend fun addAllowedPeriod(period: AllowedPeriod) {}
     override suspend fun updateAllowedPeriod(period: AllowedPeriod) {}

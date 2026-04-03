@@ -18,7 +18,7 @@ class RuleRepositoryImpl @Inject constructor(
     override fun getAllowedPeriods(packageName: String): Flow<List<AllowedPeriod>> =
         allowedPeriodDao.getByPackageName(packageName)
 
-    override fun getAllowedPeriodsSync(packageName: String): List<AllowedPeriod> =
+    override suspend fun getAllowedPeriodsSync(packageName: String): List<AllowedPeriod> =
         allowedPeriodDao.getByPackageNameSync(packageName)
 
     override suspend fun addAllowedPeriod(period: AllowedPeriod) =

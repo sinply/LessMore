@@ -2,6 +2,28 @@
 # =============================================================================
 # AppControl Android APK Build Script
 # =============================================================================
+#
+# Environment Variables:
+# ----------------------
+# JAVA_HOME      - Java 17+ installation path (auto-detected if not set)
+#                  Linux/WSL: /home/user/.local or /usr/lib/jvm/java-17
+#                  Windows:   C:\Program Files\Java\jdk-17
+#
+# GRADLE_ZIP     - Local Gradle distribution zip file (avoids download)
+#                  Example: /mnt/d/ProgramData/gradle-8.5-bin.zip
+#                  Or use -z/--gradle-zip option
+#
+# Recommended Setup (WSL):
+# ------------------------
+# Add to ~/.bashrc:
+#   export GRADLE_ZIP=/mnt/d/ProgramData/gradle-8.5-bin.zip
+#
+# First time setup:
+#   # Download Gradle zip (one-time)
+#   curl -L -o /mnt/d/ProgramData/gradle-8.5-bin.zip \
+#     https://services.gradle.org/distributions/gradle-8.5-bin.zip
+#
+# =============================================================================
 
 set -e
 
@@ -22,6 +44,7 @@ RUN_TESTS=false
 CLEAN_BUILD=false
 OUTPUT_DIR=""
 APP_OUTPUT_PREFIX="Lessmore"
+GRADLE_ZIP="${GRADLE_ZIP:-}"
 
 # =============================================================================
 # Helper Functions
@@ -59,13 +82,115 @@ print_usage() {
     echo "  -T, --test             Run unit tests before building"
     echo "  -c, --clean            Perform clean build"
     echo "  -o, --output <dir>     Copy APK to specified directory after build"
+    echo "  -z, --gradle-zip <path> Use local Gradle zip file (avoids download)"
     echo "  -h, --help             Show this help message"
     echo ""
+    echo "Environment Variables:"
+    echo "  JAVA_HOME    Java 17+ installation path (auto-detected if not set)"
+    echo "  GRADLE_ZIP   Local Gradle zip file path (avoids network download)"
+    echo ""
     echo "Examples:"
-    echo "  $0                     # Build debug APK"
-    echo "  $0 -t release          # Build release APK"
-    echo "  $0 -T -c               # Clean build with tests"
-    echo "  $0 -t debug -o ~/apk   # Build and copy to ~/apk"
+    echo "  $0                           # Build debug APK"
+    echo "  $0 -t release                # Build release APK"
+    echo "  $0 -T -c                     # Clean build with tests"
+    echo "  $0 -z /path/to/gradle.zip    # Use local Gradle zip"
+    echo "  $0 -t debug -o ~/apk         # Build and copy to ~/apk"
+    echo ""
+    echo "WSL Setup (add to ~/.bashrc):"
+    echo "  export GRADLE_ZIP=/mnt/d/ProgramData/gradle-8.5-bin.zip"
+    echo ""
+    echo "Download Gradle zip (one-time setup):"
+    echo "  curl -L -o /mnt/d/ProgramData/gradle-8.5-bin.zip \\"
+    echo "    https://services.gradle.org/distributions/gradle-8.5-bin.zip"
+}
+
+# =============================================================================
+# Environment Detection
+# =============================================================================
+
+detect_java_home() {
+    is_java_runnable() {
+        local java_bin="$1"
+        [ -x "$java_bin" ] || return 1
+        "$java_bin" -version > /dev/null 2>&1
+    }
+
+    # If JAVA_HOME is set and valid, use it
+    if [ -n "${JAVA_HOME:-}" ] && [ -x "${JAVA_HOME:-}/bin/java" ]; then
+        if is_java_runnable "${JAVA_HOME}/bin/java"; then
+            print_info "Using JAVA_HOME: $JAVA_HOME"
+            return 0
+        fi
+        print_warning "JAVA_HOME java binary is not runnable: ${JAVA_HOME}/bin/java"
+    fi
+
+    # If JAVA_HOME is set but invalid (common in WSL with Windows path)
+    if [ -n "${JAVA_HOME:-}" ]; then
+        print_warning "JAVA_HOME is set but invalid: $JAVA_HOME"
+    fi
+
+    # Try to detect Java from PATH
+    local java_path
+    java_path=$(which java 2>/dev/null || true)
+
+    if [ -n "$java_path" ]; then
+        local detected_home
+        detected_home=$(readlink -f "$java_path" 2>/dev/null | sed 's|/bin/java||' || true)
+
+        if [ -n "$detected_home" ] && is_java_runnable "$detected_home/bin/java"; then
+            export JAVA_HOME="$detected_home"
+            print_info "Auto-detected JAVA_HOME: $JAVA_HOME"
+            return 0
+        fi
+    fi
+
+    # Common Java locations
+    local common_paths=(
+        "/usr/lib/jvm/java-17-openjdk-amd64"
+        "/usr/lib/jvm/java-17"
+        "/usr/lib/jvm/default-java"
+        "/opt/java/openjdk"
+        "/usr/java/default"
+    )
+
+    for path in "${common_paths[@]}"; do
+        if is_java_runnable "$path/bin/java"; then
+            export JAVA_HOME="$path"
+            print_info "Found Java at: $JAVA_HOME"
+            return 0
+        fi
+    done
+
+    print_error "Java not found. Please install Java 17+ or set JAVA_HOME"
+    return 1
+}
+
+check_java_version() {
+    if [ ! -x "$JAVA_HOME/bin/java" ]; then
+        print_error "Java binary not found: $JAVA_HOME/bin/java"
+        return 1
+    fi
+
+    local java_output
+    if ! java_output=$("$JAVA_HOME/bin/java" -version 2>&1 | head -n 1); then
+        print_error "Failed to run Java from JAVA_HOME: $JAVA_HOME"
+        return 1
+    fi
+
+    local java_major
+    java_major=$(echo "$java_output" | sed -n 's/.*version "\([0-9][0-9]*\).*/\1/p')
+
+    if [ -z "$java_major" ]; then
+        print_error "Unable to determine Java version from: $java_output"
+        return 1
+    fi
+
+    if [ "$java_major" -lt 17 ]; then
+        print_error "Java 17 or higher is required. Found version: $java_major"
+        return 1
+    fi
+
+    print_info "Java version: $java_output"
 }
 
 check_environment() {
@@ -79,35 +204,26 @@ check_environment() {
         IS_WSL=false
     fi
 
-    # Check for cmd.exe (Windows) and ensure it's executable in current sandbox
+    # Detect Java
+    detect_java_home || exit 1
+    check_java_version || exit 1
+
+    # Check for cmd.exe (Windows)
     if command -v cmd.exe &> /dev/null && cmd.exe /c "echo ok" > /dev/null 2>&1; then
         HAS_CMD=true
     else
         HAS_CMD=false
-        if [ "$IS_WSL" = true ]; then
-            print_warning "cmd.exe unavailable in current environment, fallback to Linux Gradle"
-        fi
     fi
 
-    # Check Java
-    if command -v java &> /dev/null; then
-        local java_output
-        java_output=$(java -version 2>&1 | head -n 1 || true)
-        print_info "Java version: $java_output"
-
-        if echo "$java_output" | grep -qi "permission denied"; then
-            print_warning "System java is not executable in current environment"
-        else
-            local java_major
-            java_major=$(echo "$java_output" | sed -n 's/.*version "\([0-9][0-9]*\).*/\1/p')
-            if [ -n "$java_major" ] && [ "$java_major" -lt 17 ]; then
-                print_error "Java 17 or higher is required"
-                exit 1
-            fi
-        fi
+    # Check for local Gradle zip
+    if [ -n "$GRADLE_ZIP" ] && [ -f "$GRADLE_ZIP" ]; then
+        print_info "Will use local Gradle zip: $GRADLE_ZIP"
+        HAS_LOCAL_GRADLE_ZIP=true
     else
-        print_error "Java not found. Please install Java 17 or higher."
-        exit 1
+        HAS_LOCAL_GRADLE_ZIP=false
+        if [ -n "$GRADLE_ZIP" ]; then
+            print_warning "GRADLE_ZIP set but file not found: $GRADLE_ZIP"
+        fi
     fi
 
     # Check if project directory exists
@@ -117,6 +233,86 @@ check_environment() {
     fi
 
     print_success "Environment check passed"
+}
+
+# =============================================================================
+# Gradle Cache Management
+# =============================================================================
+
+get_gradle_dist_dir() {
+    # Get the Gradle distribution cache directory
+    local dist_dir
+
+    if [ "$IS_WSL" = true ] && [ "$HAS_CMD" = true ]; then
+        # Windows Gradle cache
+        local win_user
+        win_user=$(cmd.exe /c "echo %USERNAME%" 2>/dev/null | tr -d '\r')
+        dist_dir="/mnt/c/Users/${win_user}/.gradle/wrapper/dists"
+    else
+        # Linux Gradle cache
+        dist_dir="${HOME}/.gradle/wrapper/dists"
+    fi
+
+    echo "$dist_dir"
+}
+
+setup_local_gradle_zip() {
+    if [ "$HAS_LOCAL_GRADLE_ZIP" = false ]; then
+        return 0
+    fi
+
+    print_info "Setting up local Gradle zip..."
+
+    # Get Gradle version from wrapper properties
+    local gradle_version
+    gradle_version=$(grep "distributionUrl" "$PROJECT_ROOT/gradle/wrapper/gradle-wrapper.properties" 2>/dev/null | sed 's/.*gradle-\([0-9.]*\)-bin.zip.*/\1/' || true)
+
+    if [ -z "$gradle_version" ]; then
+        gradle_version="8.5"
+    fi
+
+    # Get the cache directory
+    local dist_dir
+    dist_dir=$(get_gradle_dist_dir)
+
+    # The hash is based on the download URL
+    local gradle_dist_dir="$dist_dir/gradle-${gradle_version}-bin"
+
+    # Find existing hash directory or create one
+    local target_dir=""
+    if [ -d "$gradle_dist_dir" ]; then
+        # Find the hash subdirectory
+        target_dir=$(find "$gradle_dist_dir" -maxdepth 1 -type d -name "*" ! -name "gradle-${gradle_version}-bin" 2>/dev/null | head -n 1)
+    fi
+
+    if [ -z "$target_dir" ]; then
+        # Calculate hash from URL
+        local url="https://services.gradle.org/distributions/gradle-${gradle_version}-bin.zip"
+        local hash
+        hash=$(echo -n "$url" | md5sum | cut -c1-32)
+
+        # Use existing hash if found
+        if [ -d "$gradle_dist_dir" ]; then
+            local existing_hash
+            existing_hash=$(ls "$gradle_dist_dir" 2>/dev/null | grep -v "gradle-${gradle_version}-bin" | head -n 1 || true)
+            if [ -n "$existing_hash" ]; then
+                hash="$existing_hash"
+            fi
+        fi
+
+        target_dir="$gradle_dist_dir/$hash"
+        mkdir -p "$target_dir"
+    fi
+
+    # Copy the zip if not already there
+    local target_zip="$target_dir/gradle-${gradle_version}-bin.zip"
+    if [ ! -f "$target_zip" ]; then
+        print_info "Copying Gradle zip to cache..."
+        cp "$GRADLE_ZIP" "$target_zip"
+        print_success "Gradle zip cached at: $target_dir"
+    else
+        print_info "Gradle zip already cached"
+    fi
 }
 
 # =============================================================================
@@ -158,15 +354,15 @@ build_with_linux_gradle() {
     print_info "Running: ./gradlew $build_cmd"
 
     cd "$PROJECT_ROOT"
-    if [ -n "${JAVA_HOME:-}" ] && [ ! -x "$JAVA_HOME/bin/java" ]; then
-        print_warning "JAVA_HOME is invalid: $JAVA_HOME, unset it for Linux Gradle"
-        unset JAVA_HOME
-    fi
-    chmod +x gradlew
-    ./gradlew $build_cmd
-    local result=$?
-    cd - > /dev/null
 
+    # Ensure gradlew is executable
+    chmod +x gradlew 2>/dev/null || true
+
+    # Run with explicit JAVA_HOME
+    JAVA_HOME="$JAVA_HOME" ./gradlew $build_cmd
+    local result=$?
+
+    cd - > /dev/null
     return $result
 }
 
@@ -229,7 +425,7 @@ resolve_apk_path() {
     fi
 
     local discovered
-    discovered=$(find "$PROJECT_ROOT/app/build/outputs/apk/$BUILD_TYPE" -maxdepth 1 -type f -name "*.apk" | head -n 1)
+    discovered=$(find "$PROJECT_ROOT/app/build/outputs/apk/$BUILD_TYPE" -maxdepth 1 -type f -name "*.apk" 2>/dev/null | head -n 1)
     if [ -n "$discovered" ]; then
         echo "$discovered"
     else
@@ -263,6 +459,10 @@ main() {
                 OUTPUT_DIR="$2"
                 shift 2
                 ;;
+            -z|--gradle-zip)
+                GRADLE_ZIP="$2"
+                shift 2
+                ;;
             -h|--help)
                 print_usage
                 exit 0
@@ -283,16 +483,21 @@ main() {
 
     check_environment
 
+    # Setup local Gradle zip if specified
+    setup_local_gradle_zip
+
     # Build
     print_info "Starting $BUILD_TYPE build..."
 
+    local build_result=0
+
     if [ "$IS_WSL" = true ] && [ "$HAS_CMD" = true ]; then
-        build_with_windows_gradle
+        build_with_windows_gradle || build_result=$?
     else
-        build_with_linux_gradle
+        build_with_linux_gradle || build_result=$?
     fi
 
-    if [ $? -eq 0 ]; then
+    if [ $build_result -eq 0 ]; then
         copy_apk
         print_build_summary
     else

@@ -84,10 +84,7 @@ internal fun LockOverlayContent(
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = stringResource(
-                                R.string.lock_usage_limit_detail,
-                                formatDuration(lockReason.usedSeconds)
-                            ),
+                            text = stringResource(R.string.lock_usage_limit_detail, formatDuration(lockReason.usedSeconds)),
                             style = MaterialTheme.typography.bodyLarge,
                             textAlign = TextAlign.Center,
                             color = if (isForcedLock) {
@@ -146,7 +143,7 @@ internal fun LockOverlayContent(
                             color = MaterialTheme.colorScheme.error
                         )
                         Text(
-                            text = "限制解除后将自动解锁",
+                            text = stringResource(R.string.lock_auto_unlock_message),
                             style = MaterialTheme.typography.bodySmall,
                             textAlign = TextAlign.Center,
                             color = Color.White.copy(alpha = 0.6f)
@@ -163,12 +160,27 @@ internal fun LockOverlayContent(
     }
 }
 
+/**
+ * 纯逻辑函数，用于测试和复用
+ * @return 格式化的时长字符串，格式为 "Xh Xm" 或 "Xm"
+ */
+internal fun formatDurationPlain(totalSeconds: Long): String {
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    return if (hours > 0) {
+        "${hours}h ${minutes}m"
+    } else {
+        "${minutes}m"
+    }
+}
+
+@Composable
 internal fun formatDuration(totalSeconds: Long): String {
     val hours = totalSeconds / 3600
     val minutes = (totalSeconds % 3600) / 60
     return if (hours > 0) {
-        "${hours}小时${minutes}分钟"
+        stringResource(R.string.duration_hours_minutes, hours, minutes)
     } else {
-        "${minutes}分钟"
+        stringResource(R.string.duration_minutes, minutes)
     }
 }

@@ -3,6 +3,8 @@ package com.appcontrol.service.overlay
 import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
+import android.provider.Settings
+import android.util.Log
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
@@ -22,6 +24,9 @@ import javax.inject.Singleton
 class LockOverlayManager @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
+    companion object {
+        private const val TAG = "LockOverlayManager"
+    }
 
     private val windowManager: WindowManager =
         context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -30,8 +35,22 @@ class LockOverlayManager @Inject constructor(
     private var currentLockReason: LockReason? = null
     private var isForcedMode: Boolean = false
     private var currentLayoutParams: WindowManager.LayoutParams? = null
+    private var overlayLifecycleOwner: OverlayLifecycleOwner? = null
 
     fun showLockScreen(lockReason: LockReason, isForcedLockMode: Boolean = false) {
+        if (!Settings.canDrawOverlays(context)) {
+            Log.w(TAG, "Overlay permission is missing, skip lock screen.")
+            return
+        }
+
+        if (overlayView != null &&
+            currentLockReason == lockReason &&
+            isForcedMode == isForcedLockMode
+        ) {
+            reassertOverlay()
+            return
+        }
+
         if (overlayView != null) {
             hideLockScreen()
         }
@@ -62,7 +81,7 @@ class LockOverlayManager @Inject constructor(
         }
 
         val composeView = ComposeView(context).apply {
-            val lifecycleOwner = OverlayLifecycleOwner()
+            val lifecycleOwner = OverlayLifecycleOwner().also { overlayLifecycleOwner = it }
             lifecycleOwner.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
             lifecycleOwner.handleLifecycleEvent(Lifecycle.Event.ON_START)
             lifecycleOwner.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
@@ -89,7 +108,15 @@ class LockOverlayManager @Inject constructor(
 
         overlayView = containerView
         currentLayoutParams = layoutParams
-        windowManager.addView(containerView, layoutParams)
+        runCatching {
+            windowManager.addView(containerView, layoutParams)
+        }.onFailure {
+            overlayView = null
+            currentLayoutParams = null
+            overlayLifecycleOwner?.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
+            overlayLifecycleOwner = null
+            Log.e(TAG, "Failed to add lock overlay view.", it)
+        }
     }
 
     /**
@@ -147,10 +174,15 @@ class LockOverlayManager @Inject constructor(
                 windowManager.removeView(view)
             } catch (_: IllegalArgumentException) {
                 // View not attached, ignore
+            } catch (_: RuntimeException) {
+                // Window token changed by system, ignore
             }
             overlayView = null
             currentLockReason = null
             currentLayoutParams = null
+            isForcedMode = false
+            overlayLifecycleOwner?.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
+            overlayLifecycleOwner = null
         }
     }
 

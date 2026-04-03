@@ -7,11 +7,13 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
+import android.app.AppOpsManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.os.Process
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
@@ -27,9 +29,11 @@ import com.appcontrol.domain.usecase.UpdateUsageUseCase
 import com.appcontrol.service.overlay.LockOverlayManager
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Calendar
 import javax.inject.Inject
 
@@ -57,7 +61,11 @@ class MonitorService : LifecycleService() {
 
         fun startService(context: Context) {
             val intent = Intent(context, MonitorService::class.java)
-            context.startForegroundService(intent)
+            runCatching {
+                context.startForegroundService(intent)
+            }.onFailure {
+                Log.e(TAG, "Failed to start monitor service.", it)
+            }
         }
 
         fun stopService(context: Context) {
@@ -86,7 +94,9 @@ class MonitorService : LifecycleService() {
                 lockOverlayManager.isInForcedMode()
             ) {
                 lockOverlayManager.reassertOverlay()
-                restoreLockStateIfNeeded()
+                lifecycleScope.launch {
+                    restoreLockStateIfNeeded()
+                }
             }
         }
     }
@@ -96,7 +106,9 @@ class MonitorService : LifecycleService() {
         createNotificationChannels()
         startForeground(MONITOR_NOTIFICATION_ID, buildMonitorNotification())
         registerSystemDialogReceiver()
-        restoreLockStateIfNeeded()
+        lifecycleScope.launch {
+            restoreLockStateIfNeeded()
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -181,6 +193,7 @@ class MonitorService : LifecycleService() {
     }
 
     private suspend fun pollForegroundApp() {
+        if (!hasUsageStatsPermission()) return
         val foregroundPackage = getForegroundPackageName() ?: return
         // Skip our own package
         if (foregroundPackage == packageName) return
@@ -189,10 +202,12 @@ class MonitorService : LifecycleService() {
 
         when (lockReason) {
             is LockReason.NotLocked -> {
-                if (lockOverlayManager.isShowing()) {
-                    lockOverlayManager.hideLockScreen()
+                withContext(Dispatchers.Main.immediate) {
+                    if (lockOverlayManager.isShowing()) {
+                        lockOverlayManager.hideLockScreen()
+                    }
                 }
-                clearPersistedLockStateIfMatches(foregroundPackage)
+                clearPersistedLockState()
                 updateUsage(foregroundPackage)
                 val shouldWarn = checkUsageWarning(foregroundPackage)
                 if (shouldWarn && foregroundPackage !in warnedApps) {
@@ -203,7 +218,9 @@ class MonitorService : LifecycleService() {
             is LockReason.UsageLimitExceeded,
             is LockReason.OutsideAllowedPeriod -> {
                 val isForcedLock = authRepository.getSettingsSync()?.forcedLockEnabled == true
-                lockOverlayManager.showLockScreen(lockReason, isForcedLock)
+                withContext(Dispatchers.Main.immediate) {
+                    lockOverlayManager.showLockScreen(lockReason, isForcedLock)
+                }
                 persistLockState(foregroundPackage, lockReason, isForcedLock)
                 Log.d(TAG, "App $foregroundPackage locked: $lockReason")
             }
@@ -211,37 +228,50 @@ class MonitorService : LifecycleService() {
     }
 
     private fun getForegroundPackageName(): String? {
+        if (!hasUsageStatsPermission()) return null
         val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val endTime = System.currentTimeMillis()
         val beginTime = endTime - 10_000
 
-        val events = usageStatsManager.queryEvents(beginTime, endTime)
-        val event = UsageEvents.Event()
-        var packageName: String? = null
-        while (events.hasNextEvent()) {
-            events.getNextEvent(event)
-            if (
-                event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND ||
-                event.eventType == UsageEvents.Event.ACTIVITY_RESUMED
-            ) {
-                packageName = event.packageName
+        try {
+            val events = usageStatsManager.queryEvents(beginTime, endTime)
+            val event = UsageEvents.Event()
+            var packageName: String? = null
+            while (events.hasNextEvent()) {
+                events.getNextEvent(event)
+                if (
+                    event.eventType == UsageEvents.Event.MOVE_TO_FOREGROUND ||
+                    event.eventType == UsageEvents.Event.ACTIVITY_RESUMED
+                ) {
+                    packageName = event.packageName
+                }
             }
-        }
-        if (!packageName.isNullOrBlank()) {
-            return packageName
+            if (!packageName.isNullOrBlank()) {
+                return packageName
+            }
+        } catch (securityException: SecurityException) {
+            Log.w(TAG, "Usage stats permission missing when querying foreground app.", securityException)
+            return null
         }
 
-        val usageStats = usageStatsManager.queryUsageStats(
-            UsageStatsManager.INTERVAL_DAILY,
-            beginTime,
-            endTime
-        )
-        if (usageStats.isNullOrEmpty()) return null
-
-        return usageStats
-            .filter { it.lastTimeUsed > 0 }
-            .maxByOrNull { it.lastTimeUsed }
-            ?.packageName
+        return try {
+            val usageStats = usageStatsManager.queryUsageStats(
+                UsageStatsManager.INTERVAL_DAILY,
+                beginTime,
+                endTime
+            )
+            if (usageStats.isNullOrEmpty()) {
+                null
+            } else {
+                usageStats
+                    .filter { it.lastTimeUsed > 0 }
+                    .maxByOrNull { it.lastTimeUsed }
+                    ?.packageName
+            }
+        } catch (securityException: SecurityException) {
+            Log.w(TAG, "Usage stats permission missing when querying usage summary.", securityException)
+            null
+        }
     }
 
     private fun sendWarningNotification(packageName: String) {
@@ -313,6 +343,29 @@ class MonitorService : LifecycleService() {
         isForcedMode: Boolean
     ) {
         val prefs = getSharedPreferences(LOCK_STATE_PREFS, Context.MODE_PRIVATE)
+        val reasonType = when (lockReason) {
+            is LockReason.UsageLimitExceeded -> LOCK_REASON_USAGE_LIMIT
+            is LockReason.OutsideAllowedPeriod -> LOCK_REASON_ALLOWED_PERIOD
+            is LockReason.NotLocked -> null
+        }
+        val unchanged = when (lockReason) {
+            is LockReason.UsageLimitExceeded -> {
+                prefs.getString(KEY_LOCKED_PACKAGE, null) == packageName &&
+                    prefs.getBoolean(KEY_FORCED_MODE, false) == isForcedMode &&
+                    prefs.getString(KEY_LOCK_REASON_TYPE, null) == reasonType &&
+                    prefs.getLong(KEY_USED_SECONDS, Long.MIN_VALUE) == lockReason.usedSeconds &&
+                    prefs.getInt(KEY_LIMIT_MINUTES, Int.MIN_VALUE) == lockReason.limitMinutes
+            }
+            is LockReason.OutsideAllowedPeriod -> {
+                prefs.getString(KEY_LOCKED_PACKAGE, null) == packageName &&
+                    prefs.getBoolean(KEY_FORCED_MODE, false) == isForcedMode &&
+                    prefs.getString(KEY_LOCK_REASON_TYPE, null) == reasonType &&
+                    prefs.getString(KEY_NEXT_PERIOD_START, null) == lockReason.nextPeriodStart
+            }
+            is LockReason.NotLocked -> !prefs.contains(KEY_LOCKED_PACKAGE) && !prefs.contains(KEY_LOCK_REASON_TYPE)
+        }
+        if (unchanged) return
+
         prefs.edit().apply {
             putString(KEY_LOCKED_PACKAGE, packageName)
             putBoolean(KEY_FORCED_MODE, isForcedMode)
@@ -339,29 +392,41 @@ class MonitorService : LifecycleService() {
         }.apply()
     }
 
-    private fun clearPersistedLockStateIfMatches(packageName: String) {
+    private fun clearPersistedLockState() {
         val prefs = getSharedPreferences(LOCK_STATE_PREFS, Context.MODE_PRIVATE)
-        val lockedPackage = prefs.getString(KEY_LOCKED_PACKAGE, null) ?: return
-        if (lockedPackage != packageName) return
+        if (!prefs.contains(KEY_LOCKED_PACKAGE) && !prefs.contains(KEY_LOCK_REASON_TYPE)) return
         prefs.edit().clear().apply()
     }
 
-    private fun restoreLockStateIfNeeded() {
+    private suspend fun restoreLockStateIfNeeded() {
         val prefs = getSharedPreferences(LOCK_STATE_PREFS, Context.MODE_PRIVATE)
         val lockReasonType = prefs.getString(KEY_LOCK_REASON_TYPE, null) ?: return
+        val lockedPackage = prefs.getString(KEY_LOCKED_PACKAGE, null) ?: return
         val isForcedMode = prefs.getBoolean(KEY_FORCED_MODE, false)
 
-        val lockReason = when (lockReasonType) {
-            LOCK_REASON_USAGE_LIMIT -> LockReason.UsageLimitExceeded(
-                usedSeconds = prefs.getLong(KEY_USED_SECONDS, 0L),
-                limitMinutes = prefs.getInt(KEY_LIMIT_MINUTES, 0)
-            )
-            LOCK_REASON_ALLOWED_PERIOD -> LockReason.OutsideAllowedPeriod(
-                nextPeriodStart = prefs.getString(KEY_NEXT_PERIOD_START, null)
-            )
-            else -> null
-        } ?: return
+        val lockReason = runCatching {
+            checkAppLockStatus(lockedPackage)
+        }.getOrNull()
 
-        lockOverlayManager.showLockScreen(lockReason, isForcedMode)
+        if (lockReason == null || lockReason is LockReason.NotLocked) {
+            clearPersistedLockState()
+            lockOverlayManager.hideLockScreen()
+            return
+        }
+
+        if (lockReasonType == LOCK_REASON_USAGE_LIMIT || lockReasonType == LOCK_REASON_ALLOWED_PERIOD) {
+            lockOverlayManager.showLockScreen(lockReason, isForcedMode)
+            persistLockState(lockedPackage, lockReason, isForcedMode)
+        }
+    }
+
+    private fun hasUsageStatsPermission(): Boolean {
+        val appOps = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+        val mode = appOps.checkOpNoThrow(
+            AppOpsManager.OPSTR_GET_USAGE_STATS,
+            Process.myUid(),
+            packageName
+        )
+        return mode == AppOpsManager.MODE_ALLOWED
     }
 }

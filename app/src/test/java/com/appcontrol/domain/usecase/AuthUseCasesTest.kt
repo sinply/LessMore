@@ -16,7 +16,7 @@ class FakeAuthRepository : AuthRepository {
     var passwordSet: String? = null
 
     override fun getSettings(): Flow<AppSettings?> = flowOf(settings)
-    override fun getSettingsSync(): AppSettings? = settings
+    override suspend fun getSettingsSync(): AppSettings? = settings
 
     override suspend fun setPassword(passwordHash: String) {
         passwordSet = passwordHash

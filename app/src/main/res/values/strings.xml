@@ -18,6 +18,7 @@
     <string name="lock_outside_period_no_next">No more allowed period today</string>
     <string name="lock_go_home">Go Home</string>
     <string name="lock_forced_message">You cannot exit until restrictions are removed</string>
+    <string name="lock_auto_unlock_message">The app will unlock automatically when restrictions are lifted</string>
 
     <string name="device_admin_label">Lessmore Device Admin</string>
     <string name="device_admin_description">Used for anti-uninstall, anti-bypass and forced lock protection</string>
@@ -110,4 +111,23 @@
 
     <string name="change_password_old">Old password</string>
     <string name="change_password_new">New password (at least 4 chars)</string>
+
+    <!-- Duration format -->
+    <string name="duration_hours_minutes">%1$d h %2$d m</string>
+    <string name="duration_minutes">%1$d m</string>
+
+    <!-- Error messages -->
+    <string name="error_init_settings_failed">Failed to initialize settings</string>
+    <string name="error_load_apps_failed">Failed to load app list</string>
+    <string name="error_update_target_app_failed">Failed to update controlled app</string>
+    <string name="error_update_whitelist_failed">Failed to update whitelist</string>
+    <string name="error_set_usage_limit_failed">Failed to set usage limit</string>
+    <string name="error_add_period_failed">Failed to add period</string>
+    <string name="error_remove_period_failed">Failed to remove period</string>
+    <string name="error_set_password_failed">Failed to set password</string>
+    <string name="error_verify_password_failed">Failed to verify password</string>
+    <string name="error_old_password_wrong">Old password is incorrect</string>
+    <string name="error_change_password_failed">Failed to change password</string>
+    <string name="error_update_biometric_failed">Failed to update biometric setting</string>
+    <string name="error_update_forced_lock_failed">Failed to update forced lock setting</string>
 </resources>

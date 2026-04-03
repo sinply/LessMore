@@ -50,7 +50,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -82,7 +81,6 @@ import com.appcontrol.service.monitor.MonitorService
 import com.appcontrol.service.receiver.AppDeviceAdminReceiver
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
-import kotlinx.coroutines.launch
 
 private const val ROUTE_ONBOARDING = "onboarding"
 private const val ROUTE_SET_PASSWORD = "set_password"
@@ -95,7 +93,6 @@ fun AppNavGraph(viewModel: AppViewModel = hiltViewModel()) {
     val context = LocalContext.current
     val settings by viewModel.settings.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
 
     val hasUsagePermission = PermissionUtils.hasUsageStatsPermission(context)
     val hasOverlayPermission = PermissionUtils.hasOverlayPermission(context)
@@ -109,8 +106,9 @@ fun AppNavGraph(viewModel: AppViewModel = hiltViewModel()) {
 
     val message by viewModel.message.collectAsState()
     LaunchedEffect(message) {
-        if (!message.isNullOrBlank()) {
-            scope.launch { snackbarHostState.showSnackbar(message!!) }
+        val safeMessage = message
+        if (!safeMessage.isNullOrBlank()) {
+            snackbarHostState.showSnackbar(safeMessage)
             viewModel.clearMessage()
         }
     }
@@ -581,6 +579,11 @@ private fun MainScreen(
                     Switch(
                         checked = monitorEnabled,
                         onCheckedChange = {
+                            if (it && hasMissingPermission) {
+                                monitorEnabled = false
+                                MonitorPreferences.setMonitorEnabled(context, false)
+                                return@Switch
+                            }
                             monitorEnabled = it
                             MonitorPreferences.setMonitorEnabled(context, it)
                             if (it) MonitorService.startService(context)
@@ -1032,6 +1035,7 @@ private fun StatsScreen(viewModel: AppViewModel) {
 private fun SettingsScreen(viewModel: AppViewModel) {
     val settings by viewModel.settings.collectAsState()
     val context = LocalContext.current
+    var selectedLanguage by remember(context) { mutableStateOf(LocaleManager.getSavedLanguage(context)) }
 
     var showAuthForToggle by remember { mutableStateOf(false) }
     var showAuthForForcedLock by remember { mutableStateOf(false) }
@@ -1126,10 +1130,13 @@ private fun SettingsScreen(viewModel: AppViewModel) {
                         LocaleManager.LANGUAGE_EN to stringResource(R.string.settings_language_en)
                     ).forEach { (tag, label) ->
                         Button(
-                            onClick = { LocaleManager.setLanguage(context, tag) },
+                            onClick = {
+                                LocaleManager.setLanguage(context, tag)
+                                selectedLanguage = tag
+                            },
                             shape = RoundedCornerShape(8.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (LocaleManager.getSavedLanguage(context) == tag)
+                                containerColor = if (selectedLanguage == tag)
                                     MaterialTheme.colorScheme.primary
                                 else
                                     MaterialTheme.colorScheme.surfaceVariant
@@ -1271,7 +1278,7 @@ private fun AuthDialog(
                 )
                 if (error != null) {
                     Text(
-                        text = error!!,
+                        text = error.orEmpty(),
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodySmall
                     )
