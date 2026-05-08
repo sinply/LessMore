@@ -47,6 +47,8 @@ class FakeUsageRepository : UsageRepository {
     var ensureCalled = false
     var lastUpdatePackage: String? = null
     var lastUpdateDate: String? = null
+    var lastOpenCountPackage: String? = null
+    var lastOpenCountDate: String? = null
 
     override suspend fun getUsageRecord(packageName: String, date: String): UsageRecord? =
         records["$packageName|$date"]
@@ -63,7 +65,15 @@ class FakeUsageRepository : UsageRepository {
             records[key] = existing.copy(usageDurationSeconds = existing.usageDurationSeconds + additionalSeconds)
         }
     }
-    override suspend fun incrementOpenCount(packageName: String, date: String) {}
+    override suspend fun incrementOpenCount(packageName: String, date: String) {
+        lastOpenCountPackage = packageName
+        lastOpenCountDate = date
+        val key = "$packageName|$date"
+        val existing = records[key]
+        if (existing != null) {
+            records[key] = existing.copy(openCount = existing.openCount + 1)
+        }
+    }
     override suspend fun ensureRecordExists(packageName: String, date: String) {
         ensureCalled = true
         val key = "$packageName|$date"
@@ -195,6 +205,26 @@ class UpdateUsageUseCaseTest : DescribeSpec({
     }
 })
 
+class RecordAppOpenUseCaseTest : DescribeSpec({
+
+    describe("RecordAppOpenUseCase") {
+
+        it("ensures record exists and increments open count for today") {
+            val usageRepo = FakeUsageRepository()
+            val useCase = RecordAppOpenUseCase(usageRepo)
+            val pkg = "com.example.app"
+
+            useCase(pkg)
+
+            val today = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+            usageRepo.ensureCalled shouldBe true
+            usageRepo.lastOpenCountPackage shouldBe pkg
+            usageRepo.lastOpenCountDate shouldBe today
+            usageRepo.records["$pkg|$today"]?.openCount shouldBe 1
+        }
+    }
+})
+
 class ResetDailyUsageUseCaseTest : DescribeSpec({
 
     describe("ResetDailyUsageUseCase") {
@@ -227,6 +257,29 @@ class CheckUsageWarningUseCaseTest : DescribeSpec({
                 apps[pkg] = TargetApp(packageName = pkg, appName = "Test App")
             }
             val usageRepo = FakeUsageRepository()
+            val useCase = CheckUsageWarningUseCase(appRepo, usageRepo)
+
+            useCase(pkg) shouldBe false
+        }
+
+        it("returns false when app is whitelisted") {
+            val pkg = "com.example.app"
+            val appRepo = FakeAppRepository().apply {
+                apps[pkg] = TargetApp(
+                    packageName = pkg,
+                    appName = "Test App",
+                    isWhitelisted = true,
+                    usageLimitMinutes = 100
+                )
+            }
+            val today = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+            val usageRepo = FakeUsageRepository().apply {
+                records["$pkg|$today"] = UsageRecord(
+                    packageName = pkg,
+                    date = today,
+                    usageDurationSeconds = 4800
+                )
+            }
             val useCase = CheckUsageWarningUseCase(appRepo, usageRepo)
 
             useCase(pkg) shouldBe false

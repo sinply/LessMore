@@ -79,6 +79,7 @@ import com.appcontrol.presentation.viewmodel.AppViewModel
 import com.appcontrol.service.monitor.MonitorPreferences
 import com.appcontrol.service.monitor.MonitorService
 import com.appcontrol.service.receiver.AppDeviceAdminReceiver
+import com.appcontrol.service.receiver.DeviceAdminAuthGate
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -1039,8 +1040,10 @@ private fun SettingsScreen(viewModel: AppViewModel) {
 
     var showAuthForToggle by remember { mutableStateOf(false) }
     var showAuthForForcedLock by remember { mutableStateOf(false) }
+    var showAuthForDisableAdmin by remember { mutableStateOf(false) }
     var pendingForcedLockValue by remember { mutableStateOf<Boolean?>(null) }
     var showChangePwd by remember { mutableStateOf(false) }
+    val isDeviceAdminActive = PermissionUtils.isDeviceAdminActive(context)
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Card(
@@ -1091,20 +1094,34 @@ private fun SettingsScreen(viewModel: AppViewModel) {
                     Switch(
                         checked = settings?.forcedLockEnabled == true,
                         onCheckedChange = {
-                            pendingForcedLockValue = it
-                            showAuthForForcedLock = true
+                            if (it && !isDeviceAdminActive) {
+                                val component = ComponentName(context, AppDeviceAdminReceiver::class.java)
+                                val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
+                                    putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, component)
+                                    putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, context.getString(R.string.permission_admin_explanation))
+                                }
+                                context.startActivity(intent)
+                            } else {
+                                pendingForcedLockValue = it
+                                showAuthForForcedLock = true
+                            }
                         },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = MaterialTheme.colorScheme.primary
                         )
                     )
                 }
-                if (!PermissionUtils.isDeviceAdminActive(context)) {
+                if (!isDeviceAdminActive) {
                     Text(
                         text = stringResource(R.string.settings_forced_lock_admin_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                } else {
+                    Spacer(Modifier.height(8.dp))
+                    TextButton(onClick = { showAuthForDisableAdmin = true }) {
+                        Text(stringResource(R.string.settings_disable_admin))
+                    }
                 }
             }
         }
@@ -1196,6 +1213,23 @@ private fun SettingsScreen(viewModel: AppViewModel) {
                 pendingForcedLockValue?.let { viewModel.setForcedLockEnabled(it) }
                 pendingForcedLockValue = null
                 showAuthForForcedLock = false
+            },
+            verify = viewModel::verifyPassword
+        )
+    }
+
+    if (showAuthForDisableAdmin) {
+        AuthDialog(
+            title = stringResource(R.string.auth_disable_admin_title),
+            onDismiss = { showAuthForDisableAdmin = false },
+            onVerified = {
+                DeviceAdminAuthGate.authorizeDisable(context)
+                val component = ComponentName(context, AppDeviceAdminReceiver::class.java)
+                val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
+                    putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, component)
+                }
+                context.startActivity(intent)
+                showAuthForDisableAdmin = false
             },
             verify = viewModel::verifyPassword
         )

@@ -14,6 +14,7 @@ class CheckUsageWarningUseCase @Inject constructor(
 
     suspend operator fun invoke(packageName: String): Boolean {
         val targetApp = appRepository.getTargetApp(packageName) ?: return false
+        if (targetApp.isWhitelisted) return false
         val limitMinutes = targetApp.usageLimitMinutes ?: return false
 
         val today = LocalDate.now().format(dateFormatter)
