@@ -194,3 +194,47 @@ scripts/
 ## 许可证
 
 MIT License
+
+## Emulator smoke QA
+
+`emulator-smoke-test.ps1` runs a repeatable Android emulator smoke test for the
+LessMore debug build.
+
+What it covers:
+
+- Builds and installs the debug APK unless `-SkipInstall` is set
+- Launches `com.appcontrol/.presentation.MainActivity`
+- Optionally clears app data with `-ResetData`
+- Sets a fresh admin password with the default test value `1234`
+- Verifies Apps, Stats, and Settings navigation
+- Authenticates a protected Controlled toggle
+- Opens the app rule screen and checks usage-limit and allowed-period controls
+- Saves UI XML, screenshots, logcat, and crash-buffer output under
+  `qa-artifacts/emulator-smoke/`
+
+Typical Windows command from the repository root:
+
+```powershell
+.\scripts\emulator-smoke-test.ps1 -Serial emulator-5554 -ResetData -RunGradleChecks
+```
+
+Useful options:
+
+| Option | Description |
+| ------ | ----------- |
+| `-Serial emulator-5554` | Select a specific adb device. If omitted, the first online device is used. |
+| `-ResetData` | Clear app data before launch and exercise the fresh password setup flow. |
+| `-Password 1234` | Set or use a custom admin password during the smoke flow. |
+| `-SkipInstall` | Reuse the already installed app. |
+| `-RunGradleChecks` | Run `testDebugUnitTest assembleDebug` in addition to install. |
+| `-ArtifactDir path` | Change the output directory for screenshots, UI dumps, and logs. |
+
+Notes:
+
+- The script resolves `adb` from `ANDROID_HOME`, `ANDROID_SDK_ROOT`,
+  `local.properties` (`sdk.dir`), or `PATH`.
+- Usage access and overlay permission must already be granted for the main flow.
+  If the app stops on onboarding, grant the missing Android permissions manually
+  and rerun the script.
+- The current tap coordinates for the first app Controlled switch are tuned for
+  the standard `LessMore_API26` emulator resolution used during QA.

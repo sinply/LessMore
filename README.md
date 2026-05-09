@@ -122,6 +122,33 @@ app/build/outputs/apk/<build_type>/Lessmore-<build_type>.apk
 
 [MIT License](LICENSE)
 
+## Emulator smoke QA
+
+Use the PowerShell smoke script when you need to validate the main Android flows on
+an emulator after a code or dependency change.
+
+Prerequisites:
+
+- An Android emulator is running and visible in `adb devices`
+- `local.properties` points `sdk.dir` to an SDK that contains `platform-tools/adb`
+- Usage access and overlay permissions are already granted on the emulator, or the
+  first launch will stop at the permission/onboarding screen
+
+Recommended command from the repository root:
+
+```powershell
+.\scripts\emulator-smoke-test.ps1 -Serial emulator-5554 -ResetData -RunGradleChecks
+```
+
+The script installs the debug APK, optionally clears app data, launches
+`com.appcontrol/.presentation.MainActivity`, sets the test admin password to
+`1234` on a fresh profile, checks Apps/Stats/Settings navigation, verifies the
+protected Controlled toggle, opens the rule screen, captures UI dumps/screenshots,
+and fails if the crash buffer contains a fatal issue.
+
+Artifacts are written to `qa-artifacts/emulator-smoke/` and can be deleted after
+review. The default test password is `1234`; override it with `-Password`.
+
 ## 致谢
 
 - [Jetpack Compose](https://developer.android.com/jetpack/compose)
