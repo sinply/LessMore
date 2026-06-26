@@ -7,6 +7,7 @@ import com.appcontrol.domain.model.LockReason
 import com.appcontrol.domain.repository.AppRepository
 import com.appcontrol.domain.repository.RuleRepository
 import com.appcontrol.domain.repository.UsageRepository
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
@@ -31,8 +32,11 @@ class FakeAppRepository : AppRepository {
 
 class FakeRuleRepository : RuleRepository {
     var periods = mutableMapOf<String, List<AllowedPeriod>>()
+    var capturedLimit: Pair<String, Int?>? = null
 
-    override suspend fun setUsageLimit(packageName: String, limitMinutes: Int?) {}
+    override suspend fun setUsageLimit(packageName: String, limitMinutes: Int?) {
+        capturedLimit = packageName to limitMinutes
+    }
     override fun getAllowedPeriods(packageName: String): Flow<List<AllowedPeriod>> =
         flowOf(periods[packageName] ?: emptyList())
     override suspend fun getAllowedPeriodsSync(packageName: String): List<AllowedPeriod> =
@@ -296,6 +300,59 @@ class CheckUsageWarningUseCaseTest : DescribeSpec({
             val useCase = CheckUsageWarningUseCase(appRepo, usageRepo)
 
             useCase(pkg) shouldBe true
+        }
+    }
+})
+
+class SetUsageLimitUseCaseTest : DescribeSpec({
+
+    describe("SetUsageLimitUseCase") {
+
+        it("accepts null to clear the limit") {
+            val ruleRepo = FakeRuleRepository()
+            val useCase = SetUsageLimitUseCase(ruleRepo)
+
+            useCase("com.example.app", null)
+
+            ruleRepo.capturedLimit shouldBe ("com.example.app" to null)
+        }
+
+        it("accepts lower bound 1 minute") {
+            val ruleRepo = FakeRuleRepository()
+            val useCase = SetUsageLimitUseCase(ruleRepo)
+
+            useCase("com.example.app", 1)
+
+            ruleRepo.capturedLimit shouldBe ("com.example.app" to 1)
+        }
+
+        it("accepts upper bound 1440 minutes") {
+            val ruleRepo = FakeRuleRepository()
+            val useCase = SetUsageLimitUseCase(ruleRepo)
+
+            useCase("com.example.app", 1440)
+
+            ruleRepo.capturedLimit shouldBe ("com.example.app" to 1440)
+        }
+
+        it("rejects 0 as out of range") {
+            val ruleRepo = FakeRuleRepository()
+            val useCase = SetUsageLimitUseCase(ruleRepo)
+
+            shouldThrow<IllegalArgumentException> {
+                useCase("com.example.app", 0)
+            }
+            ruleRepo.capturedLimit shouldBe null
+        }
+
+        it("rejects 1441 as out of range") {
+            val ruleRepo = FakeRuleRepository()
+            val useCase = SetUsageLimitUseCase(ruleRepo)
+
+            shouldThrow<IllegalArgumentException> {
+                useCase("com.example.app", 1441)
+            }
+            ruleRepo.capturedLimit shouldBe null
         }
     }
 })

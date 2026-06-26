@@ -82,6 +82,8 @@
     <string name="rule_whitelist">Whitelist</string>
     <string name="rule_limit_label">Daily usage limit (minutes)</string>
     <string name="rule_save_limit">Save usage limit</string>
+    <string name="rule_limit_hint">Range 1-1440 min, blank to clear</string>
+    <string name="rule_limit_invalid_range">Must be between 1 and 1440</string>
     <string name="rule_period_title">Allowed periods</string>
     <string name="rule_period_start">Start HH:mm</string>
     <string name="rule_period_end">End HH:mm</string>

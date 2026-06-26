@@ -839,12 +839,22 @@ private fun AppRuleScreen(
             }
         }
 
+        val parsedLimit = limitInput.toIntOrNull()
+        val limitInvalid = limitInput.isNotBlank() && (parsedLimit == null || parsedLimit !in 1..1440)
+
         OutlinedTextField(
             value = limitInput,
-            onValueChange = { limitInput = it.filter(Char::isDigit) },
+            onValueChange = { limitInput = it.filter(Char::isDigit).take(4) },
             label = { Text(stringResource(R.string.rule_limit_label)) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
+            isError = limitInvalid,
+            supportingText = {
+                Text(
+                    if (limitInvalid) stringResource(R.string.rule_limit_invalid_range)
+                    else stringResource(R.string.rule_limit_hint)
+                )
+            },
             shape = RoundedCornerShape(12.dp)
         )
 
@@ -853,6 +863,7 @@ private fun AppRuleScreen(
                 val minutes = limitInput.toIntOrNull()
                 pendingAction = { viewModel.setUsageLimit(packageName, minutes) }
             },
+            enabled = !limitInvalid,
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp)
         ) {

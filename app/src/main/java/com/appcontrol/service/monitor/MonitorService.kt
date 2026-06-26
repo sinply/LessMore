@@ -35,6 +35,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Calendar
+import java.time.LocalDate
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -84,6 +85,7 @@ class MonitorService : LifecycleService() {
 
     private var pollingJob: Job? = null
     private val warnedApps = mutableSetOf<String>()
+    private var warningDateMarker: LocalDate = LocalDate.now()
     private var closeSystemDialogsReceiverRegistered = false
     private val closeSystemDialogsReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent?) {
@@ -193,6 +195,7 @@ class MonitorService : LifecycleService() {
     }
 
     private suspend fun pollForegroundApp() {
+        refreshWarningWindowIfNeeded()
         if (!hasUsageStatsPermission()) return
         val foregroundPackage = getForegroundPackageName() ?: return
         // Skip our own package
@@ -224,6 +227,14 @@ class MonitorService : LifecycleService() {
                 persistLockState(foregroundPackage, lockReason, isForcedLock)
                 Log.d(TAG, "App $foregroundPackage locked: $lockReason")
             }
+        }
+    }
+
+    private fun refreshWarningWindowIfNeeded() {
+        val today = LocalDate.now()
+        if (today != warningDateMarker) {
+            warnedApps.clear()
+            warningDateMarker = today
         }
     }
 

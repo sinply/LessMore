@@ -82,6 +82,8 @@
     <string name="rule_whitelist">白名单</string>
     <string name="rule_limit_label">每日时长限制（分钟）</string>
     <string name="rule_save_limit">保存时长限制</string>
+    <string name="rule_limit_hint">范围 1-1440 分钟，留空清除</string>
+    <string name="rule_limit_invalid_range">需在 1-1440 之间</string>
     <string name="rule_period_title">允许时间段</string>
     <string name="rule_period_start">开始 HH:mm</string>
     <string name="rule_period_end">结束 HH:mm</string>
