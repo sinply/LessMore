@@ -24,6 +24,7 @@ import com.appcontrol.domain.model.LockReason
 import com.appcontrol.domain.usecase.CheckAppLockStatusUseCase
 import com.appcontrol.domain.usecase.CheckUsageWarningUseCase
 import com.appcontrol.domain.usecase.CleanOldDataUseCase
+import com.appcontrol.domain.usecase.RecordAppOpenUseCase
 import com.appcontrol.domain.usecase.ResetDailyUsageUseCase
 import com.appcontrol.domain.usecase.UpdateUsageUseCase
 import com.appcontrol.service.overlay.LockOverlayManager
@@ -77,6 +78,7 @@ class MonitorService : LifecycleService() {
 
     @Inject lateinit var checkAppLockStatus: CheckAppLockStatusUseCase
     @Inject lateinit var updateUsage: UpdateUsageUseCase
+    @Inject lateinit var recordAppOpen: RecordAppOpenUseCase
     @Inject lateinit var checkUsageWarning: CheckUsageWarningUseCase
     @Inject lateinit var resetDailyUsage: ResetDailyUsageUseCase
     @Inject lateinit var cleanOldData: CleanOldDataUseCase
@@ -86,6 +88,7 @@ class MonitorService : LifecycleService() {
     private var pollingJob: Job? = null
     private val warnedApps = mutableSetOf<String>()
     private var warningDateMarker: LocalDate = LocalDate.now()
+    private var lastForegroundPackage: String? = null
     private var closeSystemDialogsReceiverRegistered = false
     private val closeSystemDialogsReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent?) {
@@ -198,8 +201,11 @@ class MonitorService : LifecycleService() {
         refreshWarningWindowIfNeeded()
         if (!hasUsageStatsPermission()) return
         val foregroundPackage = getForegroundPackageName() ?: return
-        // Skip our own package
-        if (foregroundPackage == packageName) return
+        // Skip our own package while still treating it as a foreground transition.
+        if (foregroundPackage == packageName) {
+            lastForegroundPackage = foregroundPackage
+            return
+        }
 
         val lockReason = checkAppLockStatus(foregroundPackage)
 
@@ -211,6 +217,10 @@ class MonitorService : LifecycleService() {
                     }
                 }
                 clearPersistedLockState()
+                if (lastForegroundPackage != foregroundPackage) {
+                    recordAppOpen(foregroundPackage)
+                }
+                lastForegroundPackage = foregroundPackage
                 updateUsage(foregroundPackage)
                 val shouldWarn = checkUsageWarning(foregroundPackage)
                 if (shouldWarn && foregroundPackage !in warnedApps) {
@@ -225,6 +235,7 @@ class MonitorService : LifecycleService() {
                     lockOverlayManager.showLockScreen(lockReason, isForcedLock)
                 }
                 persistLockState(foregroundPackage, lockReason, isForcedLock)
+                lastForegroundPackage = foregroundPackage
                 Log.d(TAG, "App $foregroundPackage locked: $lockReason")
             }
         }
